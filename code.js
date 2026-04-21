@@ -78,6 +78,26 @@ function addSafeZoneGuide(frame, topPad, originalHeight) {
 }
 
 // ---------------------------------------------------------------------------
+// Safe fills setter — silently skips node types that don't support it
+// ---------------------------------------------------------------------------
+const FILLABLE_TYPES = new Set([
+  'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
+  'FRAME', 'COMPONENT', 'INSTANCE', 'TEXT'
+]);
+
+function setImageFillsToFill(node) {
+  if (!FILLABLE_TYPES.has(node.type)) return;
+  try {
+    const fills = node.fills;
+    if (fills === figma.mixed || !Array.isArray(fills)) return;
+    if (!fills.some(f => f.type === 'IMAGE')) return;
+    node.fills = fills.map(f =>
+      f.type === 'IMAGE' ? { ...f, scaleMode: 'FILL' } : f
+    );
+  } catch (_) { /* read-only or unsupported node — skip */ }
+}
+
+// ---------------------------------------------------------------------------
 // Core conversion
 // ---------------------------------------------------------------------------
 async function convertToReels(options) {
@@ -153,14 +173,8 @@ async function convertToReels(options) {
   // ------------------------------------------------------------------
   newFrame.resizeWithoutConstraints(W, newH);
 
-  // If the frame itself carries image fills (background-on-frame pattern)
-  // ensure they scale to cover the new size.
-  if ('fills' in newFrame && newFrame.fills !== figma.mixed) {
-    newFrame.fills = newFrame.fills.map(fill => {
-      if (fill.type === 'IMAGE') return { ...fill, scaleMode: 'FILL' };
-      return fill;
-    });
-  }
+  // If the frame itself carries an image fill, switch it to FILL mode.
+  setImageFillsToFill(newFrame);
 
   // ------------------------------------------------------------------
   // 4. Reposition / resize each child
@@ -171,22 +185,17 @@ async function convertToReels(options) {
 
     if (snap.isBackground) {
       // Stretch background to fill the entire new canvas
-      child.x = 0;
-      child.y = 0;
+      try { child.x = 0; child.y = 0; } catch (_) {}
       if (child.type !== 'TEXT') {
-        try { child.resizeWithoutConstraints(W, newH); } catch (_) { /* skip */ }
+        try { child.resizeWithoutConstraints(W, newH); } catch (_) {}
       }
-      // Switch image fills to FILL mode so they cover the larger area
-      if ('fills' in child && child.fills !== figma.mixed) {
-        child.fills = child.fills.map(fill => {
-          if (fill.type === 'IMAGE') return { ...fill, scaleMode: 'FILL' };
-          return fill;
-        });
-      }
+      setImageFillsToFill(child);
     } else {
       // Shift content into the safe zone by the top padding amount
-      child.x = snap.x;
-      child.y = snap.y + topPad;
+      try {
+        child.x = snap.x;
+        child.y = snap.y + topPad;
+      } catch (_) {}
     }
   }
 
@@ -230,13 +239,21 @@ function sendSelectionInfo() {
 // Message bus
 // ---------------------------------------------------------------------------
 figma.ui.onmessage = async (msg) => {
-  if (msg.type === 'convert') {
-    const result = await convertToReels(msg.options);
-    figma.ui.postMessage({ type: 'result', ...result });
-  } else if (msg.type === 'get-selection') {
-    sendSelectionInfo();
-  } else if (msg.type === 'close') {
-    figma.closePlugin();
+  try {
+    if (msg.type === 'convert') {
+      const result = await convertToReels(msg.options);
+      figma.ui.postMessage({ type: 'result', ...result });
+    } else if (msg.type === 'get-selection') {
+      sendSelectionInfo();
+    } else if (msg.type === 'close') {
+      figma.closePlugin();
+    }
+  } catch (err) {
+    figma.ui.postMessage({
+      type: 'result',
+      success: false,
+      message: `Unexpected error: ${err && err.message ? err.message : String(err)}`
+    });
   }
 };
 
