@@ -337,13 +337,14 @@
 
     if (!data || data.count === 0) {
       var typeNote = '';
-      if (data && data.selectedType) {
-        var friendly = { 'GROUP': 'a Group', 'TEXT': 'a Text layer', 'RECTANGLE': 'a Rectangle',
-                         'VECTOR': 'a Vector', 'SECTION': 'a Section', 'COMPONENT_SET': 'a Component Set' };
-        var label = friendly[data.selectedType] || data.selectedType;
-        typeNote = ' (' + label + ' selected &mdash; pick the outer Frame)';
+      if (data && data.allTypes && data.allTypes.length > 0) {
+        typeNote = ' &mdash; detected: <b>' + data.allTypes.join(', ') + '</b>';
+      } else if (data && data.selectedType) {
+        typeNote = ' &mdash; detected: <b>' + data.selectedType + '</b>';
+      } else {
+        typeNote = ' &mdash; <b>nothing selected</b>';
       }
-      display.innerHTML = '<span class="sel-empty">No frame selected' + typeNote + '</span>';
+      display.innerHTML = '<span class="sel-empty">Not recognised' + typeNote + '</span>';
       hint.style.display = 'none';
       selectionValid = false;
       updateConvertButton();
