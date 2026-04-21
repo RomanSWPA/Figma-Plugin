@@ -57,7 +57,7 @@
 
     .divider { height: 1px; background: #f0f0f0; margin: 12px 0; }
 
-    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
     .toggle-row label { font-size: 12px; color: #333; cursor: pointer; }
     .switch { position: relative; display: inline-block; width: 32px; height: 18px; }
     .switch input { opacity: 0; width: 0; height: 0; }
@@ -66,21 +66,18 @@
     .switch input:checked + .slider          { background: #18a0fb; }
     .switch input:checked + .slider::before { transform: translateX(14px); }
 
-    /* AI section */
-    .ai-section { background: #f0f7ff; border: 1.5px solid #c8e0ff; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-    .ai-section .toggle-row { margin-bottom: 0; }
-    .ai-key-row { margin-top: 10px; display: none; flex-direction: column; gap: 5px; }
-    .ai-key-row.visible { display: flex; }
-    .ai-key-label { font-size: 10px; color: #555; font-weight: 500; }
+    /* AI section — purely visual, no JS button interaction */
+    .ai-box { background: #f0f7ff; border: 1.5px solid #c8e0ff; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+    .ai-key-row { display: none; flex-direction: column; gap: 5px; margin-top: 10px; }
+    .ai-key-row.open { display: flex; }
     .ai-key-input {
       width: 100%; padding: 6px 8px; border: 1.5px solid #c8e0ff; border-radius: 6px;
-      font-size: 11px; color: #1a1a1a; background: #fff; outline: none;
-      font-family: 'SF Mono', 'Fira Code', monospace; transition: border-color .15s;
+      font-size: 11px; font-family: monospace; background: #fff; outline: none;
+      transition: border-color .15s;
     }
     .ai-key-input:focus { border-color: #18a0fb; }
-    .ai-hint { font-size: 10px; color: #666; line-height: 1.4; margin-top: 4px; }
+    .ai-hint { font-size: 10px; color: #666; line-height: 1.4; margin-top: 3px; }
     .ai-hint a { color: #18a0fb; text-decoration: none; }
-    .ai-hint a:hover { text-decoration: underline; }
 
     #convertBtn {
       width: 100%; padding: 10px; background: #18a0fb; color: #fff;
@@ -94,9 +91,8 @@
     #multiHint { font-size: 10px; color: #888; text-align: center; margin-bottom: 6px; display: none; }
 
     .status { display: none; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
-    .status.ok   { display: block; background: #d1f5e0; color: #0e5c31; }
-    .status.err  { display: block; background: #fde0e3; color: #821720; }
-    .status.warn { display: block; background: #fff3cd; color: #856404; }
+    .status.ok  { display: block; background: #d1f5e0; color: #0e5c31; }
+    .status.err { display: block; background: #fde0e3; color: #821720; }
   </style>
 </head>
 <body>
@@ -161,22 +157,19 @@
 
   <div class="divider"></div>
 
-  <!-- AI Background Expansion -->
-  <div class="ai-section">
-    <div class="toggle-row">
-      <label for="aiToggle" style="font-weight:600; color:#1a6bbf;">&#10024; Expand background with AI</label>
+  <!-- AI expansion (toggle only shows/hides key — never touches the Convert button) -->
+  <div class="ai-box">
+    <div class="toggle-row" style="margin-bottom:0">
+      <label for="aiToggle" style="font-weight:600;color:#1a6bbf;">&#10024; Expand background with AI</label>
       <label class="switch">
         <input type="checkbox" id="aiToggle">
         <span class="slider"></span>
       </label>
     </div>
     <div class="ai-key-row" id="aiKeyRow">
-      <div class="ai-key-label">Stability AI API Key</div>
+      <div style="font-size:10px;font-weight:500;color:#555;">Stability AI API Key</div>
       <input type="password" id="apiKeyInput" class="ai-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false" />
-      <div class="ai-hint">
-        Free key at <a href="https://platform.stability.ai/account/keys" target="_blank">platform.stability.ai</a>
-        &mdash; uses Outpaint to intelligently extend the background. Key is saved locally.
-      </div>
+      <div class="ai-hint">Get a free key at <a href="https://platform.stability.ai/account/keys" target="_blank">platform.stability.ai</a>. Saved locally.</div>
     </div>
   </div>
 
@@ -195,11 +188,11 @@
 <script>
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
-  // Restore saved API key
+  // Restore saved key
   var savedKey = localStorage.getItem('stability-api-key') || '';
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
 
-  // ── Radio ─────────────────────────────────────────────────────────────
+  // Radio buttons
   document.getElementById('radioGroup').addEventListener('change', function(e) {
     document.querySelectorAll('.radio-option').forEach(function(o) {
       o.classList.toggle('active', o.dataset.value === e.target.value);
@@ -207,7 +200,6 @@
     updateDiagram(e.target.value);
   });
 
-  // ── Diagram ───────────────────────────────────────────────────────────
   function updateDiagram(dist) {
     var extra = 0.25;
     var tf = dist === 'top' ? extra : dist === 'bottom' ? 0 : extra / 2;
@@ -218,22 +210,20 @@
     document.getElementById('safeOverlay').style.height = '75%';
   }
 
-  // ── AI toggle — only shows/hides key row, never touches the button ────
+  // AI toggle — only shows/hides the key row, never touches convertBtn
   document.getElementById('aiToggle').addEventListener('change', function() {
-    document.getElementById('aiKeyRow').classList.toggle('visible', this.checked);
-    parent.postMessage({ pluginMessage: { type: 'resize', height: this.checked ? 570 : 500 } }, '*');
+    document.getElementById('aiKeyRow').classList.toggle('open', this.checked);
+    parent.postMessage({ pluginMessage: { type: 'resize', height: this.checked ? 560 : 470 } }, '*');
   });
-
   document.getElementById('apiKeyInput').addEventListener('input', function() {
     localStorage.setItem('stability-api-key', this.value.trim());
   });
 
-  // ── Helpers ───────────────────────────────────────────────────────────
   function esc(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ── Selection display — directly controls button, no helper fn ────────
+  // ---- renderSelection: IDENTICAL to the working version ----
   function renderSelection(data) {
     var display = document.getElementById('selDisplay');
     var btn     = document.getElementById('convertBtn');
@@ -241,10 +231,10 @@
 
     if (!data || data.count === 0) {
       var note = (data && data.selectedType) ? ' (' + data.selectedType + ' selected &mdash; pick the outer Frame)' : '';
-      display.innerHTML  = '<span class="sel-empty">No frame selected' + note + '</span>';
-      hint.style.display = 'none';
-      btn.disabled       = true;
-      btn.textContent    = 'Convert to 9:16 Reels';
+      display.innerHTML   = '<span class="sel-empty">No frame selected' + note + '</span>';
+      hint.style.display  = 'none';
+      btn.disabled        = true;
+      btn.textContent     = 'Convert to 9:16 Reels';
       return;
     }
 
@@ -264,8 +254,9 @@
     btn.disabled    = false;
     btn.textContent = 'Convert to 9:16 Reels';
   }
+  // ---- end renderSelection ----
 
-  // ── Convert button — validates AI key here if needed ──────────────────
+  // Convert button: validate AI key here if AI is on, then send
   document.getElementById('convertBtn').addEventListener('click', function() {
     var dist      = document.querySelector('input[name="dist"]:checked').value;
     var showGuide = document.getElementById('safeZoneToggle').checked;
@@ -276,7 +267,7 @@
 
     if (aiOn && apiKey.length < 5) {
       statusEl.className   = 'status err';
-      statusEl.textContent = 'Enter your Stability AI API key to use AI expansion.';
+      statusEl.textContent = 'Enter your Stability AI API key above to use AI expansion.';
       return;
     }
 
@@ -291,11 +282,10 @@
     }, '*');
   });
 
-  // ── Messages from plugin ──────────────────────────────────────────────
+  // Messages from plugin
   window.addEventListener('message', function(e) {
     var msg = e.data.pluginMessage;
     if (!msg) return;
-
     if (msg.type === 'selection-info') {
       renderSelection(msg);
     } else if (msg.type === 'expand-image') {
@@ -310,7 +300,7 @@
     }
   });
 
-  // ── Stability AI outpainting ──────────────────────────────────────────
+  // Stability AI outpainting — runs in the UI iframe, posts result back
   async function handleExpandImage(data) {
     try {
       var form = new FormData();
@@ -321,7 +311,6 @@
       form.append('right', '0');
       form.append('creativity', '0.4');
       form.append('output_format', 'png');
-
       var controller = new AbortController();
       var timeout = setTimeout(function() { controller.abort(); }, 90000);
       var response = await fetch('https://api.stability.ai/v2beta/stable-image/edit/outpaint', {
@@ -330,10 +319,9 @@
         body: form, signal: controller.signal
       });
       clearTimeout(timeout);
-
       if (!response.ok) {
         var errText = await response.text();
-        throw new Error('Stability AI ' + response.status + ': ' + errText.slice(0, 160));
+        throw new Error('Stability AI ' + response.status + ': ' + errText.slice(0, 200));
       }
       parent.postMessage({
         pluginMessage: { type: 'expanded-image-result', imageBytes: Array.from(new Uint8Array(await response.arrayBuffer())) }
