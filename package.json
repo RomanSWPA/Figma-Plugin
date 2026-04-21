@@ -1,0 +1,10 @@
+{
+  "name": "reels-converter",
+  "version": "1.0.0",
+  "description": "Figma plugin — converts a 3:4 banner to 9:16 Instagram Reels format",
+  "scripts": {
+    "build": "echo 'No build step required — code.js is plain JavaScript.'"
+  },
+  "keywords": ["figma-plugin", "reels", "instagram", "banner", "conversion"],
+  "license": "MIT"
+}

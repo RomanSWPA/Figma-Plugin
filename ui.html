@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Reels Converter</title>
+  <style>
+    /* ── Reset / base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      color: #1a1a1a;
+      background: #fff;
+      padding: 16px;
+      user-select: none;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .header-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, #f84f39, #e8182d);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(232,24,45,.35);
+    }
+    .header-icon svg { display: block; }
+    .header h1   { font-size: 13px; font-weight: 700; line-height: 1.2; }
+    .header p    { font-size: 11px; color: #777; margin-top: 2px; }
+
+    /* ── Selection card ────────────────────────────────────────────── */
+    .card {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+    }
+    .card-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #999;
+      margin-bottom: 6px;
+    }
+    .sel-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 20px;
+    }
+    .sel-name {
+      flex: 1;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sel-dim {
+      font-size: 10px;
+      color: #888;
+      background: #e4e4e4;
+      padding: 2px 5px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .badge-ok  { background: #d1f5e0; color: #0e6e3a; }
+    .badge-bad { background: #fde0e3; color: #9b1c24; }
+    .sel-empty { color: #aaa; font-style: italic; }
+
+    /* ── Visual diagram ─────────────────────────────────────────────── */
+    .diagram-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 12px 8px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 14px;
+    }
+    .diagram-col { text-align: center; }
+    .diagram-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #777;
+      margin-top: 5px;
+    }
+
+    /* 3:4 box — 36×48 */
+    .box-34 {
+      width: 36px;
+      height: 48px;
+      border-radius: 3px;
+      background: linear-gradient(160deg, #7c6fcd, #b09ef5);
+      margin: 0 auto;
+    }
+
+    /* 9:16 box — 27×48 */
+    .box-916 {
+      position: relative;
+      width: 27px;
+      height: 48px;
+      border-radius: 3px;
+      background: linear-gradient(160deg, #1cb87a, #0ec88c);
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    /* Safe-zone dashed overlay */
+    .safe-overlay {
+      position: absolute;
+      left: 0;
+      right: 0;
+      border-top: 1.5px dashed rgba(255,255,255,.85);
+      border-bottom: 1.5px dashed rgba(255,255,255,.85);
+      pointer-events: none;
+      transition: top .2s, height .2s;
+    }
+    /* Slightly darkened bands above / below safe zone */
+    .ext-band {
+      position: absolute;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,.18);
+      pointer-events: none;
+      transition: height .2s, top .2s;
+    }
+
+    .arrow { font-size: 16px; color: #bbb; }
+
+    .legend {
+      font-size: 10px;
+      color: #999;
+      line-height: 1.6;
+    }
+    .legend span { display: inline-block; width: 14px; text-align: center; }
+
+    /* ── Section label ──────────────────────────────────────────────── */
+    .section-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #999;
+      margin-bottom: 7px;
+    }
+
+    /* ── Radio options ──────────────────────────────────────────────── */
+    .radio-group   { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .radio-option  {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 10px;
+      border: 1.5px solid #e8e8e8;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
+    }
+    .radio-option:hover           { border-color: #c0c0c0; background: #fafafa; }
+    .radio-option.active          { border-color: #18a0fb; background: #e8f4ff; }
+    .radio-option input           { accent-color: #18a0fb; width: 13px; height: 13px; flex-shrink: 0; cursor: pointer; }
+    .radio-title  { font-weight: 500; font-size: 12px; }
+    .radio-desc   { font-size: 10px; color: #999; margin-top: 1px; }
+
+    /* ── Divider ────────────────────────────────────────────────────── */
+    .divider { height: 1px; background: #f0f0f0; margin: 12px 0; }
+
+    /* ── Toggle ─────────────────────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .toggle-row label { font-size: 12px; color: #333; cursor: pointer; }
+    .switch { position: relative; display: inline-block; width: 32px; height: 18px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: #ccc;
+      border-radius: 18px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+      left: 3px; bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+    }
+    .switch input:checked + .slider             { background: #18a0fb; }
+    .switch input:checked + .slider::before    { transform: translateX(14px); }
+
+    /* ── Convert button ─────────────────────────────────────────────── */
+    #convertBtn {
+      width: 100%;
+      padding: 10px;
+      background: #18a0fb;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+      margin-bottom: 10px;
+    }
+    #convertBtn:hover:not(:disabled) { background: #0d8de8; }
+    #convertBtn:active:not(:disabled){ background: #0a7acf; }
+    #convertBtn:disabled              { background: #bbb; cursor: not-allowed; }
+
+    /* ── Status message ─────────────────────────────────────────────── */
+    .status {
+      display: none;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .status.ok  { display: block; background: #d1f5e0; color: #0e5c31; }
+    .status.err { display: block; background: #fde0e3; color: #821720; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <!-- Play-button triangle -->
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M5 3.5L13 8L5 12.5V3.5Z" fill="white"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Reels Converter</h1>
+      <p>3:4 banner → 9:16 Instagram Reels</p>
+    </div>
+  </div>
+
+  <!-- Selection info -->
+  <div class="card">
+    <div class="card-label">Selected Frame</div>
+    <div class="sel-row" id="selDisplay">
+      <span class="sel-empty">No frame selected</span>
+    </div>
+  </div>
+
+  <!-- Visual diagram -->
+  <div class="diagram-wrap">
+    <div class="diagram-col">
+      <div class="box-34"></div>
+      <div class="diagram-label">3:4</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="diagram-col">
+      <div class="box-916" id="box916">
+        <div class="ext-band" id="extTop"   style="top:0; height:12.5%;"></div>
+        <div class="safe-overlay"           id="safeOverlay" style="top:12.5%; height:75%;"></div>
+        <div class="ext-band" id="extBot"   style="bottom:0; height:12.5%;"></div>
+      </div>
+      <div class="diagram-label">9:16</div>
+    </div>
+    <div class="legend">
+      <div><span style="color:#1cb87a">▪</span> bg fills</div>
+      <div><span style="color:rgba(255,255,255,.85)">--</span> safe zone</div>
+    </div>
+  </div>
+
+  <!-- Space distribution -->
+  <div class="section-label">Extra Space Distribution</div>
+  <div class="radio-group" id="radioGroup">
+    <label class="radio-option active" data-value="even">
+      <input type="radio" name="dist" value="even" checked>
+      <div>
+        <div class="radio-title">Centered — even split</div>
+        <div class="radio-desc">Equal space added top &amp; bottom (recommended)</div>
+      </div>
+    </label>
+    <label class="radio-option" data-value="top">
+      <input type="radio" name="dist" value="top">
+      <div>
+        <div class="radio-title">Extend top only</div>
+        <div class="radio-desc">Original content anchored to the bottom</div>
+      </div>
+    </label>
+    <label class="radio-option" data-value="bottom">
+      <input type="radio" name="dist" value="bottom">
+      <div>
+        <div class="radio-title">Extend bottom only</div>
+        <div class="radio-desc">Original content anchored to the top</div>
+      </div>
+    </label>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Safe-zone toggle -->
+  <div class="toggle-row">
+    <label for="safeZoneToggle">Show safe-zone guide on output</label>
+    <label class="switch">
+      <input type="checkbox" id="safeZoneToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <!-- CTA -->
+  <button id="convertBtn" disabled>Convert to 9:16 Reels</button>
+
+  <!-- Status -->
+  <div class="status" id="statusMsg"></div>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────
+  let selectionValid = false;
+
+  // ── Boot: ask the plugin for the current selection ────────────────────
+  parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
+
+  // ── Radio button styling ──────────────────────────────────────────────
+  document.getElementById('radioGroup').addEventListener('change', e => {
+    document.querySelectorAll('.radio-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.value === e.target.value);
+    });
+    updateDiagram(e.target.value);
+  });
+
+  // ── Diagram update ────────────────────────────────────────────────────
+  // The original 3:4 content occupies 75 % of the 9:16 height.
+  // (3/4) / (16/9) = (3/4) × (9/16) = 27/64 ≈ 0.75 — confirmed.
+  const SAFE = 0.75;
+
+  function updateDiagram(dist) {
+    const extTop    = document.getElementById('extTop');
+    const extBot    = document.getElementById('extBot');
+    const safe      = document.getElementById('safeOverlay');
+    const extra     = 1 - SAFE; // 0.25
+
+    let topFrac, botFrac;
+    if (dist === 'top')    { topFrac = extra; botFrac = 0;     }
+    else if (dist === 'bottom') { topFrac = 0;     botFrac = extra; }
+    else                   { topFrac = extra / 2; botFrac = extra / 2; }
+
+    extTop.style.height   = (topFrac * 100) + '%';
+    extBot.style.height   = (botFrac * 100) + '%';
+    safe.style.top        = (topFrac * 100) + '%';
+    safe.style.height     = (SAFE   * 100) + '%';
+  }
+
+  // ── Selection display ─────────────────────────────────────────────────
+  function renderSelection(data) {
+    const display = document.getElementById('selDisplay');
+    const btn     = document.getElementById('convertBtn');
+
+    if (!data || !data.name) {
+      display.innerHTML = '<span class="sel-empty">No frame selected — pick a 3:4 frame</span>';
+      btn.disabled = true;
+      selectionValid = false;
+      return;
+    }
+
+    const ratio   = parseFloat(data.ratio);
+    const isValid = Math.abs(ratio - 0.75) <= 0.08;
+    const bClass  = isValid ? 'badge-ok' : 'badge-bad';
+    const bText   = isValid ? '3:4 ✓'    : ratio.toFixed(2);
+
+    display.innerHTML =
+      `<span class="sel-name" title="${esc(data.name)}">${esc(data.name)}</span>` +
+      `<span class="sel-dim">${data.width}×${data.height}</span>` +
+      `<span class="badge ${bClass}">${bText}</span>`;
+
+    btn.disabled   = !isValid;
+    selectionValid = isValid;
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Status display ────────────────────────────────────────────────────
+  function showStatus(type, msg) {
+    const el = document.getElementById('statusMsg');
+    el.className = 'status ' + type;
+    el.textContent = msg;
+  }
+  function clearStatus() {
+    const el = document.getElementById('statusMsg');
+    el.className = 'status';
+    el.textContent = '';
+  }
+
+  // ── Convert button ────────────────────────────────────────────────────
+  document.getElementById('convertBtn').addEventListener('click', () => {
+    const dist      = document.querySelector('input[name="dist"]:checked').value;
+    const showGuide = document.getElementById('safeZoneToggle').checked;
+    const btn       = document.getElementById('convertBtn');
+
+    clearStatus();
+    btn.disabled  = true;
+    btn.textContent = 'Converting…';
+
+    parent.postMessage({
+      pluginMessage: {
+        type: 'convert',
+        options: { distribution: dist, showSafeZone: showGuide }
+      }
+    }, '*');
+  });
+
+  // ── Messages from plugin ──────────────────────────────────────────────
+  window.addEventListener('message', e => {
+    const msg = e.data.pluginMessage;
+    if (!msg) return;
+
+    if (msg.type === 'selection-info') {
+      renderSelection(msg);
+    } else if (msg.type === 'result') {
+      const btn = document.getElementById('convertBtn');
+      btn.disabled    = !selectionValid;
+      btn.textContent = 'Convert to 9:16 Reels';
+
+      if (msg.success) {
+        showStatus('ok', msg.message);
+        // Refresh selection info — the newly created frame is now selected
+        setTimeout(() => {
+          parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
+        }, 400);
+      } else {
+        showStatus('err', msg.message);
+      }
+    }
+  });
+
+  // Init diagram
+  updateDiagram('even');
+</script>
+</body>
+</html>

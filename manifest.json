@@ -1,0 +1,11 @@
+{
+  "name": "Reels Converter — 3:4 to 9:16",
+  "id": "reels-converter-3-4-to-9-16",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": []
+  }
+}
