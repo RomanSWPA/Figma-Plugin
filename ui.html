@@ -193,10 +193,6 @@
   <div class="status" id="statusMsg"></div>
 
 <script>
-  // Track whether a valid frame is selected — set by renderSelection
-  var selectionReady = false;
-  var selectionCount = 0;
-
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
   // Restore saved API key
@@ -222,38 +218,22 @@
     document.getElementById('safeOverlay').style.height = '75%';
   }
 
-  // ── AI toggle ─────────────────────────────────────────────────────────
+  // ── AI toggle — only shows/hides key row, never touches the button ────
   document.getElementById('aiToggle').addEventListener('change', function() {
     document.getElementById('aiKeyRow').classList.toggle('visible', this.checked);
     parent.postMessage({ pluginMessage: { type: 'resize', height: this.checked ? 570 : 500 } }, '*');
-    updateBtn();
   });
 
   document.getElementById('apiKeyInput').addEventListener('input', function() {
     localStorage.setItem('stability-api-key', this.value.trim());
-    updateBtn();
   });
-
-  // ── Button state (called by renderSelection AND AI inputs) ────────────
-  function updateBtn() {
-    var aiOn   = document.getElementById('aiToggle').checked;
-    var apiKey = document.getElementById('apiKeyInput').value.trim();
-    var aiReady = !aiOn || apiKey.length > 4;
-    var btn = document.getElementById('convertBtn');
-    btn.disabled = !(selectionReady && aiReady);
-    if (selectionReady) {
-      btn.textContent = selectionCount > 1
-        ? 'Convert ' + selectionCount + ' Frames to 9:16'
-        : 'Convert to 9:16 Reels';
-    }
-  }
 
   // ── Helpers ───────────────────────────────────────────────────────────
   function esc(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ── Selection display ─────────────────────────────────────────────────
+  // ── Selection display — directly controls button, no helper fn ────────
   function renderSelection(data) {
     var display = document.getElementById('selDisplay');
     var btn     = document.getElementById('convertBtn');
@@ -263,8 +243,6 @@
       var note = (data && data.selectedType) ? ' (' + data.selectedType + ' selected &mdash; pick the outer Frame)' : '';
       display.innerHTML  = '<span class="sel-empty">No frame selected' + note + '</span>';
       hint.style.display = 'none';
-      selectionReady     = false;
-      selectionCount     = 0;
       btn.disabled       = true;
       btn.textContent    = 'Convert to 9:16 Reels';
       return;
@@ -274,9 +252,8 @@
       display.innerHTML  = '<span class="sel-name">' + data.count + ' frames selected</span>';
       hint.textContent   = 'All ' + data.count + ' frames will be converted';
       hint.style.display = 'block';
-      selectionReady     = true;
-      selectionCount     = data.count;
-      updateBtn();
+      btn.disabled       = false;
+      btn.textContent    = 'Convert ' + data.count + ' Frames to 9:16';
       return;
     }
 
@@ -284,19 +261,26 @@
     display.innerHTML =
       '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
       '<span class="sel-dim">' + data.width + '&times;' + data.height + '</span>';
-    selectionReady = true;
-    selectionCount = 1;
-    updateBtn();
+    btn.disabled    = false;
+    btn.textContent = 'Convert to 9:16 Reels';
   }
 
-  // ── Convert button ────────────────────────────────────────────────────
+  // ── Convert button — validates AI key here if needed ──────────────────
   document.getElementById('convertBtn').addEventListener('click', function() {
     var dist      = document.querySelector('input[name="dist"]:checked').value;
     var showGuide = document.getElementById('safeZoneToggle').checked;
     var aiOn      = document.getElementById('aiToggle').checked;
     var apiKey    = document.getElementById('apiKeyInput').value.trim();
     var btn       = document.getElementById('convertBtn');
-    document.getElementById('statusMsg').className = 'status';
+    var statusEl  = document.getElementById('statusMsg');
+
+    if (aiOn && apiKey.length < 5) {
+      statusEl.className   = 'status err';
+      statusEl.textContent = 'Enter your Stability AI API key to use AI expansion.';
+      return;
+    }
+
+    statusEl.className = 'status';
     btn.disabled    = true;
     btn.textContent = aiOn ? 'Expanding with AI…' : 'Converting…';
     parent.postMessage({
