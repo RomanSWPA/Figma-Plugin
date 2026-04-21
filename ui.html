@@ -31,10 +31,22 @@
 
     /* Selection card */
     .card { background: #f5f5f5; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+    .card-label-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 6px;
+    }
     .card-label {
       font-size: 9px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .09em; color: #999; margin-bottom: 6px;
+      letter-spacing: .09em; color: #999;
     }
+    .refresh-btn {
+      background: none; border: none; padding: 0 2px;
+      font-size: 12px; color: #bbb; cursor: pointer; line-height: 1;
+      transition: color .15s, transform .2s;
+    }
+    .refresh-btn:hover { color: #18a0fb; }
+    .refresh-btn.spinning { animation: spin .5s linear; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .sel-row { display: flex; align-items: center; gap: 6px; min-height: 20px; }
     .sel-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sel-dim  { font-size: 10px; color: #888; background: #e4e4e4; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
@@ -165,7 +177,10 @@
 
   <!-- Selection -->
   <div class="card">
-    <div class="card-label">Selected Frame</div>
+    <div class="card-label-row">
+      <div class="card-label">Selected Frame</div>
+      <button class="refresh-btn" id="refreshBtn" title="Re-read selection">&#8635;</button>
+    </div>
     <div class="sel-row" id="selDisplay">
       <span class="sel-empty">No frame selected &mdash; pick one or more 3:4 frames</span>
     </div>
@@ -260,6 +275,14 @@
 
   // Boot
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
+
+  // Refresh button
+  document.getElementById('refreshBtn').addEventListener('click', function() {
+    var btn = this;
+    btn.classList.add('spinning');
+    setTimeout(function() { btn.classList.remove('spinning'); }, 520);
+    parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
+  });
 
   // Restore saved API key
   var savedKey = localStorage.getItem('stability-api-key') || '';
