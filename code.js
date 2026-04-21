@@ -24,13 +24,6 @@ function sendSelectionInfo() {
     return Math.abs((f.width / f.height) - 0.75) <= 0.15;
   });
 
-  // Debug toast
-  var debugInfo = 'type:[' + (allTypes.join(',') || 'none') + ']'
-    + ' frames:' + frames.length
-    + ' valid:' + valid.length
-    + (frames.length > 0 ? ' ratio:' + (frames[0].width/frames[0].height).toFixed(2) : '');
-  figma.notify(debugInfo, { timeout: 4000 });
-
   if (frames.length === 0) {
     figma.ui.postMessage({
       type:         'selection-info',

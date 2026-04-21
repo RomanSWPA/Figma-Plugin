@@ -270,23 +270,23 @@
 
 <script>
   var selectionValid = false;
+  var validFrameCount = 0;
   var COMPACT_H = 470;
   var EXPANDED_H = 530;
 
-  // Boot
+  // ── Init ──────────────────────────────────────────────────────────────
+  var savedKey = localStorage.getItem('stability-api-key') || '';
+  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  updateDiagram('even');
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
-  // Refresh button
+  // ── Refresh button ────────────────────────────────────────────────────
   document.getElementById('refreshBtn').addEventListener('click', function() {
     var btn = this;
     btn.classList.add('spinning');
     setTimeout(function() { btn.classList.remove('spinning'); }, 520);
     parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
   });
-
-  // Restore saved API key
-  var savedKey = localStorage.getItem('stability-api-key') || '';
-  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
 
   // ── Radio ─────────────────────────────────────────────────────────────
   document.getElementById('radioGroup').addEventListener('change', function(e) {
@@ -297,56 +297,52 @@
   });
 
   // ── Diagram ───────────────────────────────────────────────────────────
-  var SAFE = 0.75;
   function updateDiagram(dist) {
-    var extTop = document.getElementById('extTop');
-    var extBot = document.getElementById('extBot');
-    var safe   = document.getElementById('safeOverlay');
-    var extra  = 1 - SAFE;
+    var extra = 0.25;
     var tf = dist === 'top' ? extra : dist === 'bottom' ? 0 : extra / 2;
     var bf = extra - tf;
-    extTop.style.height = (tf * 100) + '%';
-    extBot.style.height = (bf * 100) + '%';
-    safe.style.top      = (tf * 100) + '%';
-    safe.style.height   = (SAFE * 100) + '%';
+    document.getElementById('extTop').style.height    = (tf * 100) + '%';
+    document.getElementById('extBot').style.height    = (bf * 100) + '%';
+    document.getElementById('safeOverlay').style.top  = (tf * 100) + '%';
+    document.getElementById('safeOverlay').style.height = '75%';
   }
 
   // ── AI toggle ─────────────────────────────────────────────────────────
   document.getElementById('aiToggle').addEventListener('change', function() {
-    var on = this.checked;
-    var row = document.getElementById('aiKeyRow');
-    row.classList.toggle('visible', on);
-    parent.postMessage({ pluginMessage: { type: 'resize', height: on ? EXPANDED_H : COMPACT_H } }, '*');
+    document.getElementById('aiKeyRow').classList.toggle('visible', this.checked);
+    parent.postMessage({ pluginMessage: { type: 'resize', height: this.checked ? EXPANDED_H : COMPACT_H } }, '*');
     updateConvertButton();
   });
 
-  // Save API key on change
   document.getElementById('apiKeyInput').addEventListener('input', function() {
     localStorage.setItem('stability-api-key', this.value.trim());
     updateConvertButton();
   });
 
-  // ── Selection display ─────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────
   function esc(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function showStatus(type, msg) {
+    var el = document.getElementById('statusMsg');
+    el.className = 'status ' + type;
+    el.textContent = msg;
+  }
+
+  // ── Selection display ─────────────────────────────────────────────────
   function renderSelection(data) {
     var display = document.getElementById('selDisplay');
     var hint    = document.getElementById('multiHint');
 
     if (!data || data.count === 0) {
-      var typeNote = '';
-      if (data && data.allTypes && data.allTypes.length > 0) {
-        typeNote = ' &mdash; detected: <b>' + data.allTypes.join(', ') + '</b>';
-      } else if (data && data.selectedType) {
-        typeNote = ' &mdash; detected: <b>' + data.selectedType + '</b>';
-      } else {
-        typeNote = ' &mdash; <b>nothing selected</b>';
-      }
-      display.innerHTML = '<span class="sel-empty">Not recognised' + typeNote + '</span>';
+      var note = (data && data.allTypes && data.allTypes.length > 0)
+        ? ' (' + data.allTypes.join(', ') + ' selected — pick the outer Frame)'
+        : '';
+      display.innerHTML = '<span class="sel-empty">No frame selected' + note + '</span>';
       hint.style.display = 'none';
-      selectionValid = false;
+      selectionValid    = false;
+      validFrameCount   = 0;
       updateConvertButton();
       return;
     }
@@ -356,85 +352,52 @@
       display.innerHTML =
         '<span class="sel-name">' + data.count + ' frames selected</span>' +
         '<span class="badge ' + bClass + '">' + data.validCount + '/' + data.count + ' are 3:4</span>';
-      selectionValid = data.validCount > 0;
-      hint.textContent = data.validCount < data.count
+      hint.textContent   = data.validCount < data.count
         ? (data.count - data.validCount) + ' non-3:4 frame(s) will be skipped'
         : 'All frames will be converted';
       hint.style.display = 'block';
+      selectionValid     = data.validCount > 0;
+      validFrameCount    = data.validCount;
     } else {
       hint.style.display = 'none';
-      var ratio   = parseFloat(data.ratio);
-      var isValid = Math.abs(ratio - 0.75) <= 0.15;
+      var isValid = data.validCount > 0;
       display.innerHTML =
         '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
         '<span class="sel-dim">' + data.width + '&times;' + data.height + '</span>' +
         '<span class="badge ' + (isValid ? 'badge-ok' : 'badge-bad') + '">' +
-        (isValid ? '3:4 &#10003;' : ratio.toFixed(2)) + '</span>';
-      selectionValid = isValid;
+        (isValid ? '3:4 &#10003;' : parseFloat(data.ratio).toFixed(2)) + '</span>';
+      selectionValid  = isValid;
+      validFrameCount = isValid ? 1 : 0;
     }
     updateConvertButton();
   }
 
   // ── Button state ──────────────────────────────────────────────────────
   function updateConvertButton() {
-    var btn      = document.getElementById('convertBtn');
-    var aiOn     = document.getElementById('aiToggle').checked;
-    var apiKey   = document.getElementById('apiKeyInput').value.trim();
-    var aiReady  = !aiOn || apiKey.length > 4;
-    var canConvert = selectionValid && aiReady;
-    btn.disabled = !canConvert;
-
-    var sel = document.querySelector('input[name="dist"]');
-    var validCount = getValidCount();
-    if (validCount > 1) {
-      btn.textContent = 'Convert ' + validCount + ' Frames to 9:16';
-    } else {
-      btn.textContent = 'Convert to 9:16 Reels';
-    }
+    var aiOn    = document.getElementById('aiToggle').checked;
+    var apiKey  = document.getElementById('apiKeyInput').value.trim();
+    var aiReady = !aiOn || apiKey.length > 4;
+    var btn     = document.getElementById('convertBtn');
+    btn.disabled    = !(selectionValid && aiReady);
+    btn.textContent = validFrameCount > 1
+      ? 'Convert ' + validFrameCount + ' Frames to 9:16'
+      : 'Convert to 9:16 Reels';
   }
 
-  var _lastValidCount = 0;
-  function getValidCount() { return _lastValidCount; }
-
-  // Override renderSelection to track count
-  var _origRender = renderSelection;
-  renderSelection = function(data) {
-    _lastValidCount = data && data.validCount ? data.validCount : (data && data.count === 1 ? 1 : 0);
-    _origRender(data);
-  };
-
-  // ── Status ────────────────────────────────────────────────────────────
-  function showStatus(type, msg) {
-    var el = document.getElementById('statusMsg');
-    el.className = 'status ' + type;
-    el.textContent = msg;
-  }
-  function clearStatus() {
-    var el = document.getElementById('statusMsg');
-    el.className = 'status'; el.textContent = '';
-  }
-
-  // ── Convert ───────────────────────────────────────────────────────────
+  // ── Convert button ────────────────────────────────────────────────────
   document.getElementById('convertBtn').addEventListener('click', function() {
     var dist      = document.querySelector('input[name="dist"]:checked').value;
     var showGuide = document.getElementById('safeZoneToggle').checked;
     var aiOn      = document.getElementById('aiToggle').checked;
     var apiKey    = document.getElementById('apiKeyInput').value.trim();
     var btn       = document.getElementById('convertBtn');
-
-    clearStatus();
+    document.getElementById('statusMsg').className = 'status';
     btn.disabled    = true;
     btn.textContent = aiOn ? 'Expanding with AI…' : 'Converting…';
-
     parent.postMessage({
       pluginMessage: {
         type: 'convert',
-        options: {
-          distribution: dist,
-          showSafeZone: showGuide,
-          expandBg: aiOn,
-          apiKey:   aiOn ? apiKey : ''
-        }
+        options: { distribution: dist, showSafeZone: showGuide, expandBg: aiOn, apiKey: aiOn ? apiKey : '' }
       }
     }, '*');
   });
@@ -446,76 +409,51 @@
 
     if (msg.type === 'selection-info') {
       renderSelection(msg);
-
     } else if (msg.type === 'progress') {
-      var btn = document.getElementById('convertBtn');
-      btn.textContent = 'Frame ' + msg.current + '/' + msg.total + '…';
-
+      document.getElementById('convertBtn').textContent = 'Frame ' + msg.current + '/' + msg.total + '…';
     } else if (msg.type === 'expand-image') {
-      // UI thread calls Stability AI and returns the result
       handleExpandImage(msg);
-
     } else if (msg.type === 'result') {
-      updateConvertButton();
       parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
-      if (msg.success) {
-        showStatus('ok', msg.message);
-      } else {
-        showStatus('err', msg.message);
-      }
+      var el = document.getElementById('statusMsg');
+      el.className  = 'status ' + (msg.success ? 'ok' : 'err');
+      el.textContent = msg.message;
     }
   });
 
-  // ── Stability AI outpainting call ─────────────────────────────────────
+  // ── Stability AI outpainting ──────────────────────────────────────────
   async function handleExpandImage(data) {
     try {
-      var imageBytes = new Uint8Array(data.imageBytes);
-      var blob       = new Blob([imageBytes], { type: 'image/png' });
-      var form       = new FormData();
-      form.append('image', blob, 'bg.png');
-      if (data.upPx   > 0) form.append('up',    String(data.upPx));
-      if (data.downPx > 0) form.append('down',  String(data.downPx));
-      form.append('left',          '0');
-      form.append('right',         '0');
-      form.append('creativity',    '0.4');
+      var form = new FormData();
+      form.append('image', new Blob([new Uint8Array(data.imageBytes)], { type: 'image/png' }), 'bg.png');
+      if (data.upPx   > 0) form.append('up',   String(data.upPx));
+      if (data.downPx > 0) form.append('down', String(data.downPx));
+      form.append('left', '0');
+      form.append('right', '0');
+      form.append('creativity', '0.4');
       form.append('output_format', 'png');
 
       var controller = new AbortController();
-      var timeout    = setTimeout(function() { controller.abort(); }, 90000);
-
+      var timeout = setTimeout(function() { controller.abort(); }, 90000);
       var response = await fetch('https://api.stability.ai/v2beta/stable-image/edit/outpaint', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Authorization': 'Bearer ' + data.apiKey, 'Accept': 'image/*' },
-        body:    form,
-        signal:  controller.signal
+        body: form, signal: controller.signal
       });
       clearTimeout(timeout);
-
       if (!response.ok) {
         var errText = await response.text();
         throw new Error('Stability AI ' + response.status + ': ' + errText.slice(0, 160));
       }
-
-      var buf        = await response.arrayBuffer();
-      var resultArr  = Array.from(new Uint8Array(buf));
-
       parent.postMessage({
-        pluginMessage: { type: 'expanded-image-result', imageBytes: resultArr }
+        pluginMessage: { type: 'expanded-image-result', imageBytes: Array.from(new Uint8Array(await response.arrayBuffer())) }
       }, '*');
-
     } catch (err) {
-      var errMsg = err.name === 'AbortError'
-        ? 'Request timed out after 90s. Check your internet connection.'
-        : (err.message || String(err));
       parent.postMessage({
-        pluginMessage: { type: 'expanded-image-error', message: errMsg }
+        pluginMessage: { type: 'expanded-image-error', message: err.name === 'AbortError' ? 'Timed out after 90s.' : (err.message || String(err)) }
       }, '*');
     }
   }
-
-  // Init
-  updateDiagram('even');
-  updateConvertButton();
 </script>
 </body>
 </html>
