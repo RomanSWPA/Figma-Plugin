@@ -326,127 +326,135 @@
 
   <!-- CTA -->
   <button id="convertBtn" disabled>Convert to 9:16 Reels</button>
+  <div id="multiHint" style="display:none; font-size:10px; color:#888; text-align:center; margin-top:-6px; margin-bottom:8px;"></div>
 
   <!-- Status -->
   <div class="status" id="statusMsg"></div>
 
 <script>
-  // ── State ────────────────────────────────────────────────────────────
-  let selectionValid = false;
+  var selectionValid = false;
 
-  // ── Boot: ask the plugin for the current selection ────────────────────
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
   // ── Radio button styling ──────────────────────────────────────────────
-  document.getElementById('radioGroup').addEventListener('change', e => {
-    document.querySelectorAll('.radio-option').forEach(opt => {
+  document.getElementById('radioGroup').addEventListener('change', function(e) {
+    document.querySelectorAll('.radio-option').forEach(function(opt) {
       opt.classList.toggle('active', opt.dataset.value === e.target.value);
     });
     updateDiagram(e.target.value);
   });
 
   // ── Diagram update ────────────────────────────────────────────────────
-  // The original 3:4 content occupies 75 % of the 9:16 height.
-  // (3/4) / (16/9) = (3/4) × (9/16) = 27/64 ≈ 0.75 — confirmed.
-  const SAFE = 0.75;
+  var SAFE = 0.75;
 
   function updateDiagram(dist) {
-    const extTop    = document.getElementById('extTop');
-    const extBot    = document.getElementById('extBot');
-    const safe      = document.getElementById('safeOverlay');
-    const extra     = 1 - SAFE; // 0.25
-
-    let topFrac, botFrac;
-    if (dist === 'top')    { topFrac = extra; botFrac = 0;     }
+    var extTop = document.getElementById('extTop');
+    var extBot = document.getElementById('extBot');
+    var safe   = document.getElementById('safeOverlay');
+    var extra  = 1 - SAFE;
+    var topFrac, botFrac;
+    if (dist === 'top')         { topFrac = extra; botFrac = 0;     }
     else if (dist === 'bottom') { topFrac = 0;     botFrac = extra; }
-    else                   { topFrac = extra / 2; botFrac = extra / 2; }
-
-    extTop.style.height   = (topFrac * 100) + '%';
-    extBot.style.height   = (botFrac * 100) + '%';
-    safe.style.top        = (topFrac * 100) + '%';
-    safe.style.height     = (SAFE   * 100) + '%';
+    else                        { topFrac = extra / 2; botFrac = extra / 2; }
+    extTop.style.height = (topFrac * 100) + '%';
+    extBot.style.height = (botFrac * 100) + '%';
+    safe.style.top      = (topFrac * 100) + '%';
+    safe.style.height   = (SAFE   * 100) + '%';
   }
 
   // ── Selection display ─────────────────────────────────────────────────
-  function renderSelection(data) {
-    const display = document.getElementById('selDisplay');
-    const btn     = document.getElementById('convertBtn');
-
-    if (!data || !data.name) {
-      display.innerHTML = '<span class="sel-empty">No frame selected — pick a 3:4 frame</span>';
-      btn.disabled = true;
-      selectionValid = false;
-      return;
-    }
-
-    const ratio   = parseFloat(data.ratio);
-    const isValid = Math.abs(ratio - 0.75) <= 0.08;
-    const bClass  = isValid ? 'badge-ok' : 'badge-bad';
-    const bText   = isValid ? '3:4 ✓'    : ratio.toFixed(2);
-
-    display.innerHTML =
-      `<span class="sel-name" title="${esc(data.name)}">${esc(data.name)}</span>` +
-      `<span class="sel-dim">${data.width}×${data.height}</span>` +
-      `<span class="badge ${bClass}">${bText}</span>`;
-
-    btn.disabled   = !isValid;
-    selectionValid = isValid;
-  }
-
   function esc(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function renderSelection(data) {
+    var display = document.getElementById('selDisplay');
+    var btn     = document.getElementById('convertBtn');
+    var hint    = document.getElementById('multiHint');
+
+    // No frames selected
+    if (!data || data.count === 0) {
+      display.innerHTML = '<span class="sel-empty">No frame selected — pick one or more 3:4 frames</span>';
+      btn.disabled = true;
+      btn.textContent = 'Convert to 9:16 Reels';
+      hint.style.display = 'none';
+      selectionValid = false;
+      return;
+    }
+
+    // Multiple frames selected
+    if (data.count > 1) {
+      var allValid = data.validCount === data.count;
+      var bClass = data.validCount > 0 ? 'badge-ok' : 'badge-bad';
+      display.innerHTML =
+        '<span class="sel-name">' + data.count + ' frames selected</span>' +
+        '<span class="badge ' + bClass + '">' + data.validCount + '/' + data.count + ' are 3:4</span>';
+      selectionValid = data.validCount > 0;
+      btn.disabled   = !selectionValid;
+      btn.textContent = 'Convert ' + data.validCount + ' Frame' + (data.validCount > 1 ? 's' : '') + ' to 9:16';
+      hint.textContent = data.validCount < data.count
+        ? (data.count - data.validCount) + ' non-3:4 frame(s) will be skipped'
+        : 'All selected frames will be converted';
+      hint.style.display = 'block';
+      return;
+    }
+
+    // Single frame
+    hint.style.display = 'none';
+    var ratio   = parseFloat(data.ratio);
+    var isValid = Math.abs(ratio - 0.75) <= 0.08;
+    var bClass2 = isValid ? 'badge-ok' : 'badge-bad';
+    var bText   = isValid ? '3:4 ✓' : ratio.toFixed(2);
+    display.innerHTML =
+      '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
+      '<span class="sel-dim">' + data.width + '\xd7' + data.height + '</span>' +
+      '<span class="badge ' + bClass2 + '">' + bText + '</span>';
+    btn.disabled   = !isValid;
+    btn.textContent = 'Convert to 9:16 Reels';
+    selectionValid = isValid;
+  }
+
   // ── Status display ────────────────────────────────────────────────────
   function showStatus(type, msg) {
-    const el = document.getElementById('statusMsg');
-    el.className = 'status ' + type;
+    var el = document.getElementById('statusMsg');
+    el.className  = 'status ' + type;
     el.textContent = msg;
   }
   function clearStatus() {
-    const el = document.getElementById('statusMsg');
-    el.className = 'status';
+    var el = document.getElementById('statusMsg');
+    el.className  = 'status';
     el.textContent = '';
   }
 
   // ── Convert button ────────────────────────────────────────────────────
-  document.getElementById('convertBtn').addEventListener('click', () => {
-    const dist      = document.querySelector('input[name="dist"]:checked').value;
-    const showGuide = document.getElementById('safeZoneToggle').checked;
-    const btn       = document.getElementById('convertBtn');
-
+  document.getElementById('convertBtn').addEventListener('click', function() {
+    var dist      = document.querySelector('input[name="dist"]:checked').value;
+    var showGuide = document.getElementById('safeZoneToggle').checked;
+    var btn       = document.getElementById('convertBtn');
     clearStatus();
-    btn.disabled  = true;
+    btn.disabled    = true;
     btn.textContent = 'Converting…';
-
     parent.postMessage({
-      pluginMessage: {
-        type: 'convert',
-        options: { distribution: dist, showSafeZone: showGuide }
-      }
+      pluginMessage: { type: 'convert', options: { distribution: dist, showSafeZone: showGuide } }
     }, '*');
   });
 
   // ── Messages from plugin ──────────────────────────────────────────────
-  window.addEventListener('message', e => {
-    const msg = e.data.pluginMessage;
+  window.addEventListener('message', function(e) {
+    var msg = e.data.pluginMessage;
     if (!msg) return;
-
     if (msg.type === 'selection-info') {
       renderSelection(msg);
     } else if (msg.type === 'result') {
-      const btn = document.getElementById('convertBtn');
-      btn.disabled    = !selectionValid;
-      btn.textContent = 'Convert to 9:16 Reels';
-
+      var btn = document.getElementById('convertBtn');
+      btn.disabled = !selectionValid;
+      // Restore correct button label based on last known state
+      parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
       if (msg.success) {
         showStatus('ok', msg.message);
-        // Refresh selection info — the newly created frame is now selected
-        setTimeout(() => {
-          parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
-        }, 400);
       } else {
         showStatus('err', msg.message);
+        btn.textContent = 'Convert to 9:16 Reels';
       }
     }
   });

@@ -1,21 +1,17 @@
 // Reels Converter — 3:4 to 9:16
-// Converts a banner frame to Instagram Reels format.
-// Background layers are extended to fill the new canvas; all other content
-// is shifted into the safe zone (the original 3:4 content area).
+// Supports single or multi-frame selection.
+// Each output is placed directly below its source frame.
 
 figma.showUI(__html__, { width: 320, height: 460 });
 
 // ---------------------------------------------------------------------------
 // Background detection
-// A layer is treated as a background when it is named like one OR when it is
-// a rectangle/frame that covers ≥85 % of the parent frame from its origin.
 // ---------------------------------------------------------------------------
 function isBackgroundLayer(node, frameWidth, frameHeight) {
   if (node.type === 'TEXT') return false;
 
-  const name = node.name.toLowerCase().trim();
+  var name = node.name.toLowerCase().trim();
 
-  // Name-based heuristics
   if (
     name === 'bg' ||
     name.includes('background') ||
@@ -31,20 +27,16 @@ function isBackgroundLayer(node, frameWidth, frameHeight) {
     return true;
   }
 
-  // Size-based heuristics — large element anchored near the frame origin
   if ('width' in node && 'height' in node) {
-    const coversWidth  = node.width  >= frameWidth  * 0.85;
-    const coversHeight = node.height >= frameHeight * 0.85;
-    const nearOrigin   = node.x >= -10 && node.y >= -10 &&
-                         node.x <= 30  && node.y <= 30;
+    var coversWidth  = node.width  >= frameWidth  * 0.85;
+    var coversHeight = node.height >= frameHeight * 0.85;
+    var nearOrigin   = node.x >= -10 && node.y >= -10 &&
+                       node.x <= 30  && node.y <= 30;
 
     if (coversWidth && coversHeight && nearOrigin) {
-      // Rectangles and plain frames → background
       if (node.type === 'RECTANGLE' || node.type === 'FRAME') return true;
-
-      // Groups / components → background only when they carry an image fill
       if ('fills' in node && node.fills !== figma.mixed) {
-        if (node.fills.some(f => f.type === 'IMAGE')) return true;
+        if (node.fills.some(function(f) { return f.type === 'IMAGE'; })) return true;
       }
     }
   }
@@ -56,21 +48,13 @@ function isBackgroundLayer(node, frameWidth, frameHeight) {
 // Safe-zone guide overlay
 // ---------------------------------------------------------------------------
 function addSafeZoneGuide(frame, topPad, originalHeight) {
-  const rect = figma.createRectangle();
+  var rect = figma.createRectangle();
   rect.name = '[Safe Zone — delete when done]';
   rect.x = 0;
   rect.y = topPad;
   rect.resize(frame.width, originalHeight);
-  rect.fills = [{
-    type: 'SOLID',
-    color: { r: 0.098, g: 0.627, b: 0.980 },
-    opacity: 0.06
-  }];
-  rect.strokes = [{
-    type: 'SOLID',
-    color: { r: 0.098, g: 0.627, b: 0.980 },
-    opacity: 0.9
-  }];
+  rect.fills = [{ type: 'SOLID', color: { r: 0.098, g: 0.627, b: 0.980 }, opacity: 0.06 }];
+  rect.strokes = [{ type: 'SOLID', color: { r: 0.098, g: 0.627, b: 0.980 }, opacity: 0.9 }];
   rect.strokeWeight = 1.5;
   rect.dashPattern = [6, 4];
   rect.strokeAlign = 'INSIDE';
@@ -78,9 +62,9 @@ function addSafeZoneGuide(frame, topPad, originalHeight) {
 }
 
 // ---------------------------------------------------------------------------
-// Safe fills setter — silently skips node types that don't support it
+// Safe fills setter
 // ---------------------------------------------------------------------------
-const FILLABLE_TYPES = new Set([
+var FILLABLE_TYPES = new Set([
   'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
   'FRAME', 'COMPONENT', 'INSTANCE', 'TEXT'
 ]);
@@ -88,76 +72,44 @@ const FILLABLE_TYPES = new Set([
 function setImageFillsToFill(node) {
   if (!FILLABLE_TYPES.has(node.type)) return;
   try {
-    const fills = node.fills;
+    var fills = node.fills;
     if (fills === figma.mixed || !Array.isArray(fills)) return;
-    if (!fills.some(f => f.type === 'IMAGE')) return;
+    if (!fills.some(function(f) { return f.type === 'IMAGE'; })) return;
     node.fills = fills.map(function(f) {
       return f.type === 'IMAGE' ? Object.assign({}, f, { scaleMode: 'FILL' }) : f;
     });
-  } catch (_) { /* read-only or unsupported node — skip */ }
+  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
-// Core conversion
+// Convert a single validated frame — returns the new frame node
 // ---------------------------------------------------------------------------
-async function convertToReels(options) {
-  const selection = figma.currentPage.selection;
+function convertSingleFrame(original, options) {
+  var W = original.width;
+  var H = original.height;
+  var newH = Math.round(W * 16 / 9);
+  var extra = newH - H;
 
-  if (selection.length === 0) {
-    return { success: false, message: 'Nothing selected. Please select a 3:4 banner frame first.' };
-  }
-
-  const original = selection[0];
-
-  if (original.type !== 'FRAME') {
-    return { success: false, message: 'Selection must be a Frame. Groups and components are not supported directly — try wrapping them in a frame.' };
-  }
-
-  if (original.layoutMode && original.layoutMode !== 'NONE') {
-    return { success: false, message: 'Auto Layout frames are not supported. Detach Auto Layout (Cmd/Ctrl + Shift + G) before converting.' };
-  }
-
-  const W = original.width;
-  const H = original.height;
-  const ratio = W / H;
-
-  // Accept anything within 8 % of 3:4 (= 0.75)
-  if (Math.abs(ratio - 0.75) > 0.08) {
-    return {
-      success: false,
-      message: `Frame ratio is not 3:4 (detected ${Math.round(W)}×${Math.round(H)}, ratio ${ratio.toFixed(3)}). Please select a 3:4 banner.`
-    };
-  }
-
-  const newH   = Math.round(W * 16 / 9);
-  const extra  = newH - H;
-
-  // Determine how extra vertical space is distributed
-  let topPad, botPad;
+  var topPad, botPad;
   if (options.distribution === 'top') {
     topPad = extra; botPad = 0;
   } else if (options.distribution === 'bottom') {
     topPad = 0; botPad = extra;
   } else {
-    // 'even' — default
     topPad = Math.floor(extra / 2);
     botPad = extra - topPad;
   }
 
-  // ------------------------------------------------------------------
-  // 1. Clone the original frame and position it to the right
-  // ------------------------------------------------------------------
-  const newFrame = original.clone();
-  newFrame.name = `${original.name} — 9:16 Reels`;
-  newFrame.x    = original.x + W + 80;
-  newFrame.y    = original.y;
+  // Clone and place directly below the original (40 px gap)
+  var newFrame = original.clone();
+  newFrame.name = original.name + ' — 9:16 Reels';
+  newFrame.x    = original.x;
+  newFrame.y    = original.y + H + 40;
 
-  // ------------------------------------------------------------------
-  // 2. Snapshot child positions BEFORE the frame is resized, and
-  //    classify each child as background vs. content
-  // ------------------------------------------------------------------
-  const snapshots = new Map();
-  for (const child of newFrame.children) {
+  // Snapshot child positions before resize
+  var snapshots = new Map();
+  for (var i = 0; i < newFrame.children.length; i++) {
+    var child = newFrame.children[i];
     snapshots.set(child.id, {
       x:            child.x,
       y:            child.y,
@@ -167,81 +119,136 @@ async function convertToReels(options) {
     });
   }
 
-  // ------------------------------------------------------------------
-  // 3. Resize the frame — use resizeWithoutConstraints so children
-  //    stay at their original coordinates; we reposition them below.
-  // ------------------------------------------------------------------
+  // Resize frame without triggering constraint-based repositioning
   newFrame.resizeWithoutConstraints(W, newH);
 
-  // If the frame itself carries an image fill, switch it to FILL mode.
+  // Update any image fill on the frame itself
   setImageFillsToFill(newFrame);
 
-  // ------------------------------------------------------------------
-  // 4. Reposition / resize each child
-  // ------------------------------------------------------------------
-  for (const child of newFrame.children) {
-    const snap = snapshots.get(child.id);
+  // Reposition / resize children
+  for (var j = 0; j < newFrame.children.length; j++) {
+    var c = newFrame.children[j];
+    var snap = snapshots.get(c.id);
     if (!snap) continue;
 
     if (snap.isBackground) {
-      // Stretch background to fill the entire new canvas
-      try { child.x = 0; child.y = 0; } catch (_) {}
-      if (child.type !== 'TEXT') {
-        try { child.resizeWithoutConstraints(W, newH); } catch (_) {}
+      try { c.x = 0; c.y = 0; } catch (_) {}
+      if (c.type !== 'TEXT') {
+        try { c.resizeWithoutConstraints(W, newH); } catch (_) {}
       }
-      setImageFillsToFill(child);
+      setImageFillsToFill(c);
     } else {
-      // Shift content into the safe zone by the top padding amount
-      try {
-        child.x = snap.x;
-        child.y = snap.y + topPad;
-      } catch (_) {}
+      try { c.x = snap.x; c.y = snap.y + topPad; } catch (_) {}
     }
   }
 
-  // ------------------------------------------------------------------
-  // 5. Optional safe-zone guide overlay
-  // ------------------------------------------------------------------
   if (options.showSafeZone) {
     addSafeZoneGuide(newFrame, topPad, H);
   }
 
-  // Focus the result
-  figma.currentPage.selection = [newFrame];
-  figma.viewport.scrollAndZoomIntoView([newFrame]);
-
-  return {
-    success: true,
-    message: `Done! "${original.name}" converted to ${Math.round(W)}×${newH}px (9:16). Added ${topPad}px top / ${botPad}px bottom.`
-  };
+  return newFrame;
 }
 
 // ---------------------------------------------------------------------------
-// Selection info helper — sent on open and on every selection change
+// Main entry — handles any number of selected frames
+// ---------------------------------------------------------------------------
+async function convertToReels(options) {
+  var selection = figma.currentPage.selection;
+
+  if (selection.length === 0) {
+    return { success: false, message: 'Nothing selected. Select one or more 3:4 banner frames.' };
+  }
+
+  var frames = selection.filter(function(n) { return n.type === 'FRAME'; });
+
+  if (frames.length === 0) {
+    return { success: false, message: 'No frames in selection. Please select frame layers (not groups or components).' };
+  }
+
+  var converted = 0;
+  var skipped   = [];
+  var newFrames = [];
+
+  for (var i = 0; i < frames.length; i++) {
+    var original = frames[i];
+
+    if (original.layoutMode && original.layoutMode !== 'NONE') {
+      skipped.push('"' + original.name + '": Auto Layout not supported — detach it first');
+      continue;
+    }
+
+    var ratio = original.width / original.height;
+    if (Math.abs(ratio - 0.75) > 0.08) {
+      skipped.push('"' + original.name + '": not 3:4 (' + Math.round(original.width) + '×' + Math.round(original.height) + ')');
+      continue;
+    }
+
+    try {
+      var result = convertSingleFrame(original, options);
+      newFrames.push(result);
+      converted++;
+    } catch (err) {
+      skipped.push('"' + original.name + '": ' + (err.message || String(err)));
+    }
+  }
+
+  if (converted === 0) {
+    return { success: false, message: 'Nothing converted. ' + skipped.join('; ') };
+  }
+
+  // Select all new frames and zoom to fit
+  figma.currentPage.selection = newFrames;
+  figma.viewport.scrollAndZoomIntoView(newFrames);
+
+  var msg = 'Converted ' + converted + ' frame' + (converted > 1 ? 's' : '') + ' to 9:16.';
+  if (skipped.length > 0) {
+    msg += ' Skipped ' + skipped.length + ': ' + skipped.join('; ');
+  }
+  return { success: true, message: msg };
+}
+
+// ---------------------------------------------------------------------------
+// Selection info — reports count and how many are valid 3:4 frames
 // ---------------------------------------------------------------------------
 function sendSelectionInfo() {
-  const sel = figma.currentPage.selection;
-  if (sel.length > 0 && sel[0].type === 'FRAME') {
-    const f = sel[0];
+  var sel = figma.currentPage.selection;
+  var frames = sel.filter(function(n) { return n.type === 'FRAME'; });
+  var valid  = frames.filter(function(f) {
+    return Math.abs((f.width / f.height) - 0.75) <= 0.08;
+  });
+
+  if (frames.length === 0) {
+    figma.ui.postMessage({ type: 'selection-info', count: 0 });
+    return;
+  }
+
+  if (frames.length === 1) {
+    var f = frames[0];
     figma.ui.postMessage({
-      type:   'selection-info',
-      name:   f.name,
-      width:  Math.round(f.width),
-      height: Math.round(f.height),
-      ratio:  (f.width / f.height).toFixed(3)
+      type:       'selection-info',
+      count:      1,
+      validCount: valid.length,
+      name:       f.name,
+      width:      Math.round(f.width),
+      height:     Math.round(f.height),
+      ratio:      (f.width / f.height).toFixed(3)
     });
   } else {
-    figma.ui.postMessage({ type: 'selection-info', name: null });
+    figma.ui.postMessage({
+      type:       'selection-info',
+      count:      frames.length,
+      validCount: valid.length
+    });
   }
 }
 
 // ---------------------------------------------------------------------------
 // Message bus
 // ---------------------------------------------------------------------------
-figma.ui.onmessage = async (msg) => {
+figma.ui.onmessage = async function(msg) {
   try {
     if (msg.type === 'convert') {
-      const result = await convertToReels(msg.options);
+      var result = await convertToReels(msg.options);
       figma.ui.postMessage(Object.assign({ type: 'result' }, result));
     } else if (msg.type === 'get-selection') {
       sendSelectionInfo();
@@ -252,7 +259,7 @@ figma.ui.onmessage = async (msg) => {
     figma.ui.postMessage({
       type: 'result',
       success: false,
-      message: `Unexpected error: ${err && err.message ? err.message : String(err)}`
+      message: 'Unexpected error: ' + (err && err.message ? err.message : String(err))
     });
   }
 };
