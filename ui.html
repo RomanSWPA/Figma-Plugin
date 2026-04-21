@@ -57,7 +57,7 @@
 
     .divider { height: 1px; background: #f0f0f0; margin: 12px 0; }
 
-    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .toggle-row label { font-size: 12px; color: #333; cursor: pointer; }
     .switch { position: relative; display: inline-block; width: 32px; height: 18px; }
     .switch input { opacity: 0; width: 0; height: 0; }
@@ -65,6 +65,22 @@
     .slider::before { content: ''; position: absolute; width: 12px; height: 12px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform .2s; }
     .switch input:checked + .slider          { background: #18a0fb; }
     .switch input:checked + .slider::before { transform: translateX(14px); }
+
+    /* AI section */
+    .ai-section { background: #f0f7ff; border: 1.5px solid #c8e0ff; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+    .ai-section .toggle-row { margin-bottom: 0; }
+    .ai-key-row { margin-top: 10px; display: none; flex-direction: column; gap: 5px; }
+    .ai-key-row.visible { display: flex; }
+    .ai-key-label { font-size: 10px; color: #555; font-weight: 500; }
+    .ai-key-input {
+      width: 100%; padding: 6px 8px; border: 1.5px solid #c8e0ff; border-radius: 6px;
+      font-size: 11px; color: #1a1a1a; background: #fff; outline: none;
+      font-family: 'SF Mono', 'Fira Code', monospace; transition: border-color .15s;
+    }
+    .ai-key-input:focus { border-color: #18a0fb; }
+    .ai-hint { font-size: 10px; color: #666; line-height: 1.4; margin-top: 4px; }
+    .ai-hint a { color: #18a0fb; text-decoration: none; }
+    .ai-hint a:hover { text-decoration: underline; }
 
     #convertBtn {
       width: 100%; padding: 10px; background: #18a0fb; color: #fff;
@@ -78,8 +94,9 @@
     #multiHint { font-size: 10px; color: #888; text-align: center; margin-bottom: 6px; display: none; }
 
     .status { display: none; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
-    .status.ok  { display: block; background: #d1f5e0; color: #0e5c31; }
-    .status.err { display: block; background: #fde0e3; color: #821720; }
+    .status.ok   { display: block; background: #d1f5e0; color: #0e5c31; }
+    .status.err  { display: block; background: #fde0e3; color: #821720; }
+    .status.warn { display: block; background: #fff3cd; color: #856404; }
   </style>
 </head>
 <body>
@@ -144,6 +161,25 @@
 
   <div class="divider"></div>
 
+  <!-- AI Background Expansion -->
+  <div class="ai-section">
+    <div class="toggle-row">
+      <label for="aiToggle" style="font-weight:600; color:#1a6bbf;">&#10024; Expand background with AI</label>
+      <label class="switch">
+        <input type="checkbox" id="aiToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="ai-key-row" id="aiKeyRow">
+      <div class="ai-key-label">Stability AI API Key</div>
+      <input type="password" id="apiKeyInput" class="ai-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+      <div class="ai-hint">
+        Free key at <a href="https://platform.stability.ai/account/keys" target="_blank">platform.stability.ai</a>
+        &mdash; uses Outpaint to intelligently extend the background. Key is saved locally.
+      </div>
+    </div>
+  </div>
+
   <div class="toggle-row">
     <label for="safeZoneToggle">Show safe-zone guide on output</label>
     <label class="switch">
@@ -157,8 +193,17 @@
   <div class="status" id="statusMsg"></div>
 
 <script>
+  // Track whether a valid frame is selected — set by renderSelection
+  var selectionReady = false;
+  var selectionCount = 0;
+
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
+  // Restore saved API key
+  var savedKey = localStorage.getItem('stability-api-key') || '';
+  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+
+  // ── Radio ─────────────────────────────────────────────────────────────
   document.getElementById('radioGroup').addEventListener('change', function(e) {
     document.querySelectorAll('.radio-option').forEach(function(o) {
       o.classList.toggle('active', o.dataset.value === e.target.value);
@@ -166,6 +211,7 @@
     updateDiagram(e.target.value);
   });
 
+  // ── Diagram ───────────────────────────────────────────────────────────
   function updateDiagram(dist) {
     var extra = 0.25;
     var tf = dist === 'top' ? extra : dist === 'bottom' ? 0 : extra / 2;
@@ -176,10 +222,38 @@
     document.getElementById('safeOverlay').style.height = '75%';
   }
 
+  // ── AI toggle ─────────────────────────────────────────────────────────
+  document.getElementById('aiToggle').addEventListener('change', function() {
+    document.getElementById('aiKeyRow').classList.toggle('visible', this.checked);
+    parent.postMessage({ pluginMessage: { type: 'resize', height: this.checked ? 570 : 500 } }, '*');
+    updateBtn();
+  });
+
+  document.getElementById('apiKeyInput').addEventListener('input', function() {
+    localStorage.setItem('stability-api-key', this.value.trim());
+    updateBtn();
+  });
+
+  // ── Button state (called by renderSelection AND AI inputs) ────────────
+  function updateBtn() {
+    var aiOn   = document.getElementById('aiToggle').checked;
+    var apiKey = document.getElementById('apiKeyInput').value.trim();
+    var aiReady = !aiOn || apiKey.length > 4;
+    var btn = document.getElementById('convertBtn');
+    btn.disabled = !(selectionReady && aiReady);
+    if (selectionReady) {
+      btn.textContent = selectionCount > 1
+        ? 'Convert ' + selectionCount + ' Frames to 9:16'
+        : 'Convert to 9:16 Reels';
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
   function esc(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // ── Selection display ─────────────────────────────────────────────────
   function renderSelection(data) {
     var display = document.getElementById('selDisplay');
     var btn     = document.getElementById('convertBtn');
@@ -187,10 +261,12 @@
 
     if (!data || data.count === 0) {
       var note = (data && data.selectedType) ? ' (' + data.selectedType + ' selected &mdash; pick the outer Frame)' : '';
-      display.innerHTML   = '<span class="sel-empty">No frame selected' + note + '</span>';
-      hint.style.display  = 'none';
-      btn.disabled        = true;
-      btn.textContent     = 'Convert to 9:16 Reels';
+      display.innerHTML  = '<span class="sel-empty">No frame selected' + note + '</span>';
+      hint.style.display = 'none';
+      selectionReady     = false;
+      selectionCount     = 0;
+      btn.disabled       = true;
+      btn.textContent    = 'Convert to 9:16 Reels';
       return;
     }
 
@@ -198,38 +274,50 @@
       display.innerHTML  = '<span class="sel-name">' + data.count + ' frames selected</span>';
       hint.textContent   = 'All ' + data.count + ' frames will be converted';
       hint.style.display = 'block';
-      btn.disabled       = false;
-      btn.textContent    = 'Convert ' + data.count + ' Frames to 9:16';
+      selectionReady     = true;
+      selectionCount     = data.count;
+      updateBtn();
       return;
     }
 
-    // Single frame — show name + dimensions, enable button unconditionally
     hint.style.display = 'none';
     display.innerHTML =
       '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
       '<span class="sel-dim">' + data.width + '&times;' + data.height + '</span>';
-    btn.disabled    = false;
-    btn.textContent = 'Convert to 9:16 Reels';
+    selectionReady = true;
+    selectionCount = 1;
+    updateBtn();
   }
 
+  // ── Convert button ────────────────────────────────────────────────────
   document.getElementById('convertBtn').addEventListener('click', function() {
     var dist      = document.querySelector('input[name="dist"]:checked').value;
     var showGuide = document.getElementById('safeZoneToggle').checked;
+    var aiOn      = document.getElementById('aiToggle').checked;
+    var apiKey    = document.getElementById('apiKeyInput').value.trim();
     var btn       = document.getElementById('convertBtn');
-    var statusEl  = document.getElementById('statusMsg');
-    statusEl.className = 'status';
+    document.getElementById('statusMsg').className = 'status';
     btn.disabled    = true;
-    btn.textContent = 'Converting…';
+    btn.textContent = aiOn ? 'Expanding with AI…' : 'Converting…';
     parent.postMessage({
-      pluginMessage: { type: 'convert', options: { distribution: dist, showSafeZone: showGuide } }
+      pluginMessage: {
+        type: 'convert',
+        options: { distribution: dist, showSafeZone: showGuide, expandBg: aiOn, apiKey: aiOn ? apiKey : '' }
+      }
     }, '*');
   });
 
+  // ── Messages from plugin ──────────────────────────────────────────────
   window.addEventListener('message', function(e) {
     var msg = e.data.pluginMessage;
     if (!msg) return;
+
     if (msg.type === 'selection-info') {
       renderSelection(msg);
+    } else if (msg.type === 'expand-image') {
+      handleExpandImage(msg);
+    } else if (msg.type === 'progress') {
+      document.getElementById('convertBtn').textContent = 'Frame ' + msg.current + '/' + msg.total + '…';
     } else if (msg.type === 'result') {
       parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
       var el = document.getElementById('statusMsg');
@@ -237,6 +325,41 @@
       el.textContent = msg.message;
     }
   });
+
+  // ── Stability AI outpainting ──────────────────────────────────────────
+  async function handleExpandImage(data) {
+    try {
+      var form = new FormData();
+      form.append('image', new Blob([new Uint8Array(data.imageBytes)], { type: 'image/png' }), 'bg.png');
+      if (data.upPx   > 0) form.append('up',   String(data.upPx));
+      if (data.downPx > 0) form.append('down', String(data.downPx));
+      form.append('left', '0');
+      form.append('right', '0');
+      form.append('creativity', '0.4');
+      form.append('output_format', 'png');
+
+      var controller = new AbortController();
+      var timeout = setTimeout(function() { controller.abort(); }, 90000);
+      var response = await fetch('https://api.stability.ai/v2beta/stable-image/edit/outpaint', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + data.apiKey, 'Accept': 'image/*' },
+        body: form, signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        var errText = await response.text();
+        throw new Error('Stability AI ' + response.status + ': ' + errText.slice(0, 160));
+      }
+      parent.postMessage({
+        pluginMessage: { type: 'expanded-image-result', imageBytes: Array.from(new Uint8Array(await response.arrayBuffer())) }
+      }, '*');
+    } catch (err) {
+      parent.postMessage({
+        pluginMessage: { type: 'expanded-image-error', message: err.name === 'AbortError' ? 'Timed out after 90s.' : (err.message || String(err)) }
+      }, '*');
+    }
+  }
 
   updateDiagram('even');
 </script>
