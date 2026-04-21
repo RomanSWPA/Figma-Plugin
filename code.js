@@ -91,9 +91,9 @@ function setImageFillsToFill(node) {
     const fills = node.fills;
     if (fills === figma.mixed || !Array.isArray(fills)) return;
     if (!fills.some(f => f.type === 'IMAGE')) return;
-    node.fills = fills.map(f =>
-      f.type === 'IMAGE' ? { ...f, scaleMode: 'FILL' } : f
-    );
+    node.fills = fills.map(function(f) {
+      return f.type === 'IMAGE' ? Object.assign({}, f, { scaleMode: 'FILL' }) : f;
+    });
   } catch (_) { /* read-only or unsupported node — skip */ }
 }
 
@@ -242,7 +242,7 @@ figma.ui.onmessage = async (msg) => {
   try {
     if (msg.type === 'convert') {
       const result = await convertToReels(msg.options);
-      figma.ui.postMessage({ type: 'result', ...result });
+      figma.ui.postMessage(Object.assign({ type: 'result' }, result));
     } else if (msg.type === 'get-selection') {
       sendSelectionInfo();
     } else if (msg.type === 'close') {
