@@ -181,7 +181,7 @@
     </label>
   </div>
 
-  <button id="convertBtn" disabled>Convert to 9:16 Reels</button>
+  <button id="convertBtn">Convert to 9:16 Reels</button>
   <div id="multiHint"></div>
   <div class="status" id="statusMsg"></div>
 
@@ -223,18 +223,14 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ---- renderSelection: IDENTICAL to the working version ----
   function renderSelection(data) {
     var display = document.getElementById('selDisplay');
-    var btn     = document.getElementById('convertBtn');
     var hint    = document.getElementById('multiHint');
 
     if (!data || data.count === 0) {
       var note = (data && data.selectedType) ? ' (' + data.selectedType + ' selected &mdash; pick the outer Frame)' : '';
-      display.innerHTML   = '<span class="sel-empty">No frame selected' + note + '</span>';
-      hint.style.display  = 'none';
-      btn.disabled        = true;
-      btn.textContent     = 'Convert to 9:16 Reels';
+      display.innerHTML  = '<span class="sel-empty">No frame selected' + note + '</span>';
+      hint.style.display = 'none';
       return;
     }
 
@@ -242,8 +238,6 @@
       display.innerHTML  = '<span class="sel-name">' + data.count + ' frames selected</span>';
       hint.textContent   = 'All ' + data.count + ' frames will be converted';
       hint.style.display = 'block';
-      btn.disabled       = false;
-      btn.textContent    = 'Convert ' + data.count + ' Frames to 9:16';
       return;
     }
 
@@ -251,10 +245,7 @@
     display.innerHTML =
       '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
       '<span class="sel-dim">' + data.width + '&times;' + data.height + '</span>';
-    btn.disabled    = false;
-    btn.textContent = 'Convert to 9:16 Reels';
   }
-  // ---- end renderSelection ----
 
   // Convert button: validate AI key here if AI is on, then send
   document.getElementById('convertBtn').addEventListener('click', function() {
