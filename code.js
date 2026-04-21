@@ -113,8 +113,12 @@ async function convertSingleFrame(original, options) {
              : Math.floor(extra / 2);
   var botPad = extra - topPad;
 
-  // 1. Clone and place directly below original (40 px gap)
-  var newFrame  = original.clone();
+  // 1. Clone, detach if instance, and place directly below original (40 px gap)
+  var newFrame = original.clone();
+  // Instances must be detached before we can freely resize/reposition children
+  if (newFrame.type === 'INSTANCE') {
+    try { newFrame = newFrame.detachInstance(); } catch (_) {}
+  }
   newFrame.name = original.name + ' — 9:16 Reels';
   newFrame.x    = original.x;
   newFrame.y    = original.y + H + 40;
@@ -220,9 +224,12 @@ async function convertToReels(options) {
     return { success: false, message: 'Nothing selected. Select one or more 3:4 banner frames.' };
   }
 
-  var frames = selection.filter(function(n) { return n.type === 'FRAME'; });
+  var frames = selection.filter(function(n) {
+    return CONVERTIBLE_TYPES.indexOf(n.type) !== -1;
+  });
   if (frames.length === 0) {
-    return { success: false, message: 'No frames in selection — please select frame layers.' };
+    var types = selection.map(function(n) { return n.type; }).join(', ');
+    return { success: false, message: 'No convertible layers selected (got: ' + types + '). Select a Frame, Component, or Instance.' };
   }
 
   var converted = 0;
@@ -279,15 +286,21 @@ async function convertToReels(options) {
 // ---------------------------------------------------------------------------
 // Selection info
 // ---------------------------------------------------------------------------
+// Accept plain frames, components, and component instances.
+var CONVERTIBLE_TYPES = ['FRAME', 'COMPONENT', 'INSTANCE'];
+
 function sendSelectionInfo() {
   var sel    = figma.currentPage.selection;
-  var frames = sel.filter(function(n) { return n.type === 'FRAME'; });
+  var frames = sel.filter(function(n) {
+    return CONVERTIBLE_TYPES.indexOf(n.type) !== -1;
+  });
   var valid  = frames.filter(function(f) {
     return Math.abs((f.width / f.height) - 0.75) <= 0.08;
   });
 
   if (frames.length === 0) {
-    figma.ui.postMessage({ type: 'selection-info', count: 0 });
+    var hint = sel.length > 0 ? sel[0].type : null;
+    figma.ui.postMessage({ type: 'selection-info', count: 0, selectedType: hint });
     return;
   }
   if (frames.length === 1) {

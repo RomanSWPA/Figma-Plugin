@@ -313,7 +313,14 @@
     var hint    = document.getElementById('multiHint');
 
     if (!data || data.count === 0) {
-      display.innerHTML = '<span class="sel-empty">No frame selected &mdash; pick one or more 3:4 frames</span>';
+      var typeNote = '';
+      if (data && data.selectedType) {
+        var friendly = { 'GROUP': 'a Group', 'TEXT': 'a Text layer', 'RECTANGLE': 'a Rectangle',
+                         'VECTOR': 'a Vector', 'SECTION': 'a Section', 'COMPONENT_SET': 'a Component Set' };
+        var label = friendly[data.selectedType] || data.selectedType;
+        typeNote = ' (' + label + ' selected &mdash; pick the outer Frame)';
+      }
+      display.innerHTML = '<span class="sel-empty">No frame selected' + typeNote + '</span>';
       hint.style.display = 'none';
       selectionValid = false;
       updateConvertButton();
