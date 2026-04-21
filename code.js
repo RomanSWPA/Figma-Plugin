@@ -1,7 +1,6 @@
 // Reels Converter — 3:4 to 9:16
 // Supports single or multi-frame selection.
 // Each output is placed directly below its source frame.
-// Optional AI background expansion via Stability AI outpainting.
 
 var CONVERTIBLE_TYPES = ['FRAME', 'COMPONENT', 'INSTANCE'];
 
@@ -102,30 +101,12 @@ function setImageFillsToFill(node) {
 }
 
 // ---------------------------------------------------------------------------
-// AI expansion — async round-trip through the UI iframe
+// Convert one frame (synchronous) — returns { newFrame, topPad, botPad, W, newH }
 // ---------------------------------------------------------------------------
-var pendingExpandResolve = null;
-var pendingExpandReject  = null;
-
-function requestExpansion(imageBytes, upPx, downPx, apiKey) {
-  return new Promise(function(resolve, reject) {
-    pendingExpandResolve = resolve;
-    pendingExpandReject  = reject;
-    figma.ui.postMessage({
-      type: 'expand-image',
-      imageBytes: Array.from(imageBytes),
-      upPx: upPx, downPx: downPx, apiKey: apiKey
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Convert one frame
-// ---------------------------------------------------------------------------
-async function convertSingleFrame(original, options) {
-  var W    = original.width;
-  var H    = original.height;
-  var newH = Math.round(W * 16 / 9);
+function convertSingleFrame(original, options) {
+  var W     = original.width;
+  var H     = original.height;
+  var newH  = Math.round(W * 16 / 9);
   var extra = newH - H;
 
   var topPad = options.distribution === 'top'    ? extra
@@ -141,74 +122,63 @@ async function convertSingleFrame(original, options) {
   newFrame.x    = original.x;
   newFrame.y    = original.y + H + 40;
 
-  // Snapshot children + find background node
   var snapshots = new Map();
-  var bgNode    = null;
   for (var i = 0; i < newFrame.children.length; i++) {
     var child = newFrame.children[i];
-    var isBg  = isBackgroundLayer(child, W, H);
     snapshots.set(child.id, {
       x: child.x, y: child.y,
       width: child.width, height: child.height,
-      isBackground: isBg
+      isBackground: isBackgroundLayer(child, W, H)
     });
-    if (isBg && !bgNode) bgNode = child;
   }
 
-  // AI expansion before any resizing
-  var expandedBytes = null;
-  if (options.expandBg && options.apiKey && bgNode) {
-    var bgSnap    = snapshots.get(bgNode.id);
-    var fitsFrame = Math.abs(bgSnap.x) <= 4 && Math.abs(bgSnap.y) <= 4 &&
-                    Math.abs(bgSnap.width - W) <= 4 && Math.abs(bgSnap.height - H) <= 4;
-    if (fitsFrame) {
-      try {
-        var rawBytes = await bgNode.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
-        expandedBytes = await requestExpansion(rawBytes, topPad, botPad, options.apiKey);
-      } catch (err) {
-        figma.ui.postMessage({
-          type: 'result', success: false,
-          message: 'AI expansion failed: ' + (err.message || String(err)) + ' — try without AI.'
-        });
-        return null;
-      }
-    }
-  }
-
-  // Resize frame
   newFrame.resizeWithoutConstraints(W, newH);
   setImageFillsToFill(newFrame);
 
-  // Reposition / resize children
   for (var j = 0; j < newFrame.children.length; j++) {
     var c    = newFrame.children[j];
     var snap = snapshots.get(c.id);
     if (!snap) continue;
-
     if (snap.isBackground) {
       try { c.x = 0; c.y = 0; } catch (_) {}
       if (c.type !== 'TEXT') {
         try { c.resizeWithoutConstraints(W, newH); } catch (_) {}
       }
-      if (c === bgNode && expandedBytes) {
-        try {
-          var newImage = figma.createImage(new Uint8Array(expandedBytes));
-          if (FILLABLE_TYPES.has(c.type)) {
-            var existing = (c.fills !== figma.mixed && Array.isArray(c.fills)) ? c.fills : [];
-            var overlays = existing.filter(function(f) { return f.type !== 'IMAGE'; });
-            c.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: newImage.hash }].concat(overlays);
-          }
-        } catch (_) { setImageFillsToFill(c); }
-      } else {
-        setImageFillsToFill(c);
-      }
+      setImageFillsToFill(c);
     } else {
       try { c.x = snap.x; c.y = snap.y + topPad; } catch (_) {}
     }
   }
 
   if (options.showSafeZone) addSafeZoneGuide(newFrame, topPad, H);
-  return newFrame;
+  return { newFrame: newFrame, topPad: topPad, botPad: botPad, W: W, newH: newH };
+}
+
+// ---------------------------------------------------------------------------
+// AI expansion — promise bridge (UI does the fetch, plugin handles Figma ops)
+// ---------------------------------------------------------------------------
+var pendingExpandResolve = null;
+var pendingExpandReject  = null;
+
+async function requestExpansion(frameBytes, topPad, botPad, apiKey) {
+  return new Promise(function(resolve, reject) {
+    pendingExpandResolve = resolve;
+    pendingExpandReject  = reject;
+    figma.ui.postMessage({
+      type:   'expand-image',
+      bytes:  Array.from(frameBytes),
+      topPad: topPad,
+      botPad: botPad,
+      apiKey: apiKey
+    });
+    setTimeout(function() {
+      if (pendingExpandReject) {
+        pendingExpandReject(new Error('AI expansion timed out (30s)'));
+        pendingExpandResolve = null;
+        pendingExpandReject  = null;
+      }
+    }, 30000);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -228,9 +198,10 @@ async function convertToReels(options) {
     return { success: false, message: 'Select a Frame, Component, or Instance (got: ' + types + ').' };
   }
 
-  var converted = 0;
-  var skipped   = [];
-  var newFrames = [];
+  var converted  = 0;
+  var skipped    = [];
+  var aiWarnings = [];
+  var newFrames  = [];
 
   for (var i = 0; i < frames.length; i++) {
     var original = frames[i];
@@ -238,14 +209,34 @@ async function convertToReels(options) {
       skipped.push('"' + original.name + '": Auto Layout — detach first');
       continue;
     }
-
-    if (options.expandBg && frames.length > 1) {
-      figma.ui.postMessage({ type: 'progress', current: i + 1, total: frames.length });
-    }
-
     try {
-      var result = await convertSingleFrame(original, options);
-      if (result) { newFrames.push(result); converted++; }
+      var res      = convertSingleFrame(original, options);
+      var newFrame = res.newFrame;
+      newFrames.push(newFrame);
+
+      if (options.expandBg && options.apiKey) {
+        try {
+          var bytes         = await original.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
+          var expandedBytes = await requestExpansion(bytes, res.topPad, res.botPad, options.apiKey);
+          var image         = figma.createImage(new Uint8Array(expandedBytes));
+          var applied       = false;
+          for (var k = 0; k < newFrame.children.length; k++) {
+            var ch = newFrame.children[k];
+            if (isBackgroundLayer(ch, res.W, res.newH)) {
+              ch.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
+              applied  = true;
+              break;
+            }
+          }
+          if (!applied) {
+            newFrame.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
+          }
+        } catch (aiErr) {
+          aiWarnings.push(aiErr.message || String(aiErr));
+        }
+      }
+
+      converted++;
     } catch (err) {
       skipped.push('"' + original.name + '": ' + (err.message || String(err)));
     }
@@ -259,7 +250,8 @@ async function convertToReels(options) {
   figma.viewport.scrollAndZoomIntoView(newFrames);
 
   var msg = 'Converted ' + converted + ' frame' + (converted > 1 ? 's' : '') + ' to 9:16.';
-  if (skipped.length) msg += ' Skipped: ' + skipped.join('; ');
+  if (aiWarnings.length) msg += ' AI issue: ' + aiWarnings.join('; ');
+  if (skipped.length)    msg += ' Skipped: '  + skipped.join('; ');
   return { success: true, message: msg };
 }
 
@@ -267,29 +259,6 @@ async function convertToReels(options) {
 // Message bus
 // ---------------------------------------------------------------------------
 figma.ui.onmessage = async function(msg) {
-  if (msg.type === 'expanded-image-result') {
-    if (pendingExpandResolve) {
-      var res = pendingExpandResolve;
-      pendingExpandResolve = null;
-      pendingExpandReject  = null;
-      res(msg.imageBytes);
-    }
-    return;
-  }
-  if (msg.type === 'expanded-image-error') {
-    if (pendingExpandReject) {
-      var rej = pendingExpandReject;
-      pendingExpandResolve = null;
-      pendingExpandReject  = null;
-      rej(new Error(msg.message));
-    }
-    return;
-  }
-  if (msg.type === 'resize') {
-    figma.ui.resize(320, msg.height);
-    return;
-  }
-
   try {
     if (msg.type === 'convert') {
       var result = await convertToReels(msg.options);
@@ -298,6 +267,20 @@ figma.ui.onmessage = async function(msg) {
       sendSelectionInfo();
     } else if (msg.type === 'close') {
       figma.closePlugin();
+    } else if (msg.type === 'expanded-image-result') {
+      if (pendingExpandResolve) {
+        pendingExpandResolve(msg.bytes);
+        pendingExpandResolve = null;
+        pendingExpandReject  = null;
+      }
+    } else if (msg.type === 'expanded-image-error') {
+      if (pendingExpandReject) {
+        pendingExpandReject(new Error(msg.message || 'AI expansion failed'));
+        pendingExpandResolve = null;
+        pendingExpandReject  = null;
+      }
+    } else if (msg.type === 'resize') {
+      figma.ui.resize(320, msg.height);
     }
   } catch (err) {
     figma.ui.postMessage({
