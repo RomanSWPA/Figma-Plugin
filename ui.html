@@ -364,7 +364,7 @@
     } else {
       hint.style.display = 'none';
       var ratio   = parseFloat(data.ratio);
-      var isValid = Math.abs(ratio - 0.75) <= 0.08;
+      var isValid = Math.abs(ratio - 0.75) <= 0.15;
       display.innerHTML =
         '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
         '<span class="sel-dim">' + data.width + '&times;' + data.height + '</span>' +

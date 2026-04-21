@@ -17,15 +17,19 @@ function sendSelectionInfo() {
   // Build a list of all selected types for debug output
   var allTypes = sel.map(function(n) { return n.type; });
 
-  // Debug toast — tells us exactly what Figma sees
-  figma.notify('Detected: [' + (allTypes.join(', ') || 'nothing') + ']', { timeout: 3000 });
-
   var frames = sel.filter(function(n) {
     return CONVERTIBLE_TYPES.indexOf(n.type) !== -1;
   });
   var valid = frames.filter(function(f) {
-    return Math.abs((f.width / f.height) - 0.75) <= 0.08;
+    return Math.abs((f.width / f.height) - 0.75) <= 0.15;
   });
+
+  // Debug toast
+  var debugInfo = 'type:[' + (allTypes.join(',') || 'none') + ']'
+    + ' frames:' + frames.length
+    + ' valid:' + valid.length
+    + (frames.length > 0 ? ' ratio:' + (frames[0].width/frames[0].height).toFixed(2) : '');
+  figma.notify(debugInfo, { timeout: 4000 });
 
   if (frames.length === 0) {
     figma.ui.postMessage({
