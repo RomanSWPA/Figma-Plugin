@@ -4,5 +4,9 @@
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
-  "editorType": ["figma"]
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["https://api.stability.ai"],
+    "reasoning": "Used to call Stability AI outpainting API for intelligent background expansion"
+  }
 }

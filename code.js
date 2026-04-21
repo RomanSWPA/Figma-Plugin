@@ -1,8 +1,9 @@
 // Reels Converter — 3:4 to 9:16
 // Supports single or multi-frame selection.
 // Each output is placed directly below its source frame.
+// Optional AI background expansion via Stability AI outpainting.
 
-figma.showUI(__html__, { width: 320, height: 460 });
+figma.showUI(__html__, { width: 320, height: 470 });
 
 // ---------------------------------------------------------------------------
 // Background detection
@@ -23,16 +24,13 @@ function isBackgroundLayer(node, frameWidth, frameHeight) {
     name.includes('_bg') ||
     name.includes('bg-') ||
     name.includes('bg_')
-  ) {
-    return true;
-  }
+  ) { return true; }
 
   if ('width' in node && 'height' in node) {
     var coversWidth  = node.width  >= frameWidth  * 0.85;
     var coversHeight = node.height >= frameHeight * 0.85;
     var nearOrigin   = node.x >= -10 && node.y >= -10 &&
                        node.x <= 30  && node.y <= 30;
-
     if (coversWidth && coversHeight && nearOrigin) {
       if (node.type === 'RECTANGLE' || node.type === 'FRAME') return true;
       if ('fills' in node && node.fills !== figma.mixed) {
@@ -40,7 +38,6 @@ function isBackgroundLayer(node, frameWidth, frameHeight) {
       }
     }
   }
-
   return false;
 }
 
@@ -53,11 +50,11 @@ function addSafeZoneGuide(frame, topPad, originalHeight) {
   rect.x = 0;
   rect.y = topPad;
   rect.resize(frame.width, originalHeight);
-  rect.fills = [{ type: 'SOLID', color: { r: 0.098, g: 0.627, b: 0.980 }, opacity: 0.06 }];
-  rect.strokes = [{ type: 'SOLID', color: { r: 0.098, g: 0.627, b: 0.980 }, opacity: 0.9 }];
+  rect.fills   = [{ type: 'SOLID', color: { r: 0.098, g: 0.627, b: 0.980 }, opacity: 0.06 }];
+  rect.strokes = [{ type: 'SOLID', color: { r: 0.098, g: 0.627, b: 0.980 }, opacity: 0.9  }];
   rect.strokeWeight = 1.5;
-  rect.dashPattern = [6, 4];
-  rect.strokeAlign = 'INSIDE';
+  rect.dashPattern  = [6, 4];
+  rect.strokeAlign  = 'INSIDE';
   frame.appendChild(rect);
 }
 
@@ -82,52 +79,103 @@ function setImageFillsToFill(node) {
 }
 
 // ---------------------------------------------------------------------------
-// Convert a single validated frame — returns the new frame node
+// AI expansion — async round-trip through the UI iframe
+// The UI thread performs the actual fetch; we use a promise pair to await it.
 // ---------------------------------------------------------------------------
-function convertSingleFrame(original, options) {
-  var W = original.width;
-  var H = original.height;
+var pendingExpandResolve = null;
+var pendingExpandReject  = null;
+
+function requestExpansion(imageBytes, upPx, downPx, apiKey) {
+  return new Promise(function(resolve, reject) {
+    pendingExpandResolve = resolve;
+    pendingExpandReject  = reject;
+    figma.ui.postMessage({
+      type:       'expand-image',
+      imageBytes: Array.from(imageBytes),   // plain array survives postMessage
+      upPx:       upPx,
+      downPx:     downPx,
+      apiKey:     apiKey
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Convert one validated frame  (always async — may await AI call)
+// ---------------------------------------------------------------------------
+async function convertSingleFrame(original, options) {
+  var W    = original.width;
+  var H    = original.height;
   var newH = Math.round(W * 16 / 9);
   var extra = newH - H;
 
-  var topPad, botPad;
-  if (options.distribution === 'top') {
-    topPad = extra; botPad = 0;
-  } else if (options.distribution === 'bottom') {
-    topPad = 0; botPad = extra;
-  } else {
-    topPad = Math.floor(extra / 2);
-    botPad = extra - topPad;
-  }
+  var topPad = options.distribution === 'top'    ? extra
+             : options.distribution === 'bottom' ? 0
+             : Math.floor(extra / 2);
+  var botPad = extra - topPad;
 
-  // Clone and place directly below the original (40 px gap)
-  var newFrame = original.clone();
+  // 1. Clone and place directly below original (40 px gap)
+  var newFrame  = original.clone();
   newFrame.name = original.name + ' — 9:16 Reels';
   newFrame.x    = original.x;
   newFrame.y    = original.y + H + 40;
 
-  // Snapshot child positions before resize
+  // 2. Snapshot children + find primary background node
   var snapshots = new Map();
+  var bgNode    = null;
+
   for (var i = 0; i < newFrame.children.length; i++) {
     var child = newFrame.children[i];
+    var isBg  = isBackgroundLayer(child, W, H);
     snapshots.set(child.id, {
-      x:            child.x,
-      y:            child.y,
-      width:        child.width,
-      height:       child.height,
-      isBackground: isBackgroundLayer(child, W, H)
+      x: child.x, y: child.y,
+      width: child.width, height: child.height,
+      isBackground: isBg,
+      aiExpanded: false
     });
+    if (isBg && !bgNode) bgNode = child;
   }
 
-  // Resize frame without triggering constraint-based repositioning
-  newFrame.resizeWithoutConstraints(W, newH);
+  // 3. Optionally expand background with AI (before any Figma modifications)
+  var expandedBytes = null;
 
-  // Update any image fill on the frame itself
+  if (options.expandBg && options.apiKey && bgNode) {
+    var bgSnap = snapshots.get(bgNode.id);
+    // AI works best when background exactly fills the frame; skip otherwise
+    var fitsFrame = Math.abs(bgSnap.x) <= 4 &&
+                    Math.abs(bgSnap.y) <= 4 &&
+                    Math.abs(bgSnap.width  - W) <= 4 &&
+                    Math.abs(bgSnap.height - H) <= 4;
+
+    if (fitsFrame) {
+      try {
+        var rawBytes = await bgNode.exportAsync({
+          format: 'PNG',
+          constraint: { type: 'SCALE', value: 1 }
+        });
+        expandedBytes = await requestExpansion(rawBytes, topPad, botPad, options.apiKey);
+      } catch (err) {
+        figma.ui.postMessage({
+          type: 'expand-warning',
+          message: 'AI expansion failed for “' + original.name + '”: ' +
+                   (err.message || String(err)) + '. Background scaled instead.'
+        });
+        expandedBytes = null;
+      }
+    } else {
+      figma.ui.postMessage({
+        type: 'expand-warning',
+        message: '“' + original.name + '”: background doesn’t fill the frame — scaled instead.'
+      });
+    }
+  }
+
+  // 4. Resize frame
+  newFrame.resizeWithoutConstraints(W, newH);
   setImageFillsToFill(newFrame);
 
-  // Reposition / resize children
+  // 5. Reposition / resize children
   for (var j = 0; j < newFrame.children.length; j++) {
-    var c = newFrame.children[j];
+    var c    = newFrame.children[j];
     var snap = snapshots.get(c.id);
     if (!snap) continue;
 
@@ -136,55 +184,78 @@ function convertSingleFrame(original, options) {
       if (c.type !== 'TEXT') {
         try { c.resizeWithoutConstraints(W, newH); } catch (_) {}
       }
-      setImageFillsToFill(c);
+
+      if (c === bgNode && expandedBytes) {
+        // Replace image fill with AI-expanded version
+        try {
+          var newImage = figma.createImage(new Uint8Array(expandedBytes));
+          if (FILLABLE_TYPES.has(c.type)) {
+            var existing = (c.fills !== figma.mixed && Array.isArray(c.fills)) ? c.fills : [];
+            var overlays = existing.filter(function(f) { return f.type !== 'IMAGE'; });
+            c.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: newImage.hash }].concat(overlays);
+          }
+        } catch (_) {
+          setImageFillsToFill(c); // fallback
+        }
+      } else {
+        setImageFillsToFill(c); // regular scale
+      }
+
     } else {
       try { c.x = snap.x; c.y = snap.y + topPad; } catch (_) {}
     }
   }
 
-  if (options.showSafeZone) {
-    addSafeZoneGuide(newFrame, topPad, H);
-  }
+  if (options.showSafeZone) addSafeZoneGuide(newFrame, topPad, H);
 
   return newFrame;
 }
 
 // ---------------------------------------------------------------------------
-// Main entry — handles any number of selected frames
+// Main entry — processes all selected valid frames
 // ---------------------------------------------------------------------------
 async function convertToReels(options) {
   var selection = figma.currentPage.selection;
-
   if (selection.length === 0) {
     return { success: false, message: 'Nothing selected. Select one or more 3:4 banner frames.' };
   }
 
   var frames = selection.filter(function(n) { return n.type === 'FRAME'; });
-
   if (frames.length === 0) {
-    return { success: false, message: 'No frames in selection. Please select frame layers (not groups or components).' };
+    return { success: false, message: 'No frames in selection — please select frame layers.' };
   }
 
   var converted = 0;
   var skipped   = [];
   var newFrames = [];
+  var warnings  = [];
+
+  // Collect warnings posted during conversion
+  var warnHandler = function(msg) {
+    if (msg.type === 'expand-warning') warnings.push(msg.message);
+  };
 
   for (var i = 0; i < frames.length; i++) {
     var original = frames[i];
 
     if (original.layoutMode && original.layoutMode !== 'NONE') {
-      skipped.push('"' + original.name + '": Auto Layout not supported — detach it first');
+      skipped.push('"' + original.name + '": Auto Layout — detach first');
+      continue;
+    }
+    var ratio = original.width / original.height;
+    if (Math.abs(ratio - 0.75) > 0.08) {
+      skipped.push('"' + original.name + '": not 3:4 (' +
+                   Math.round(original.width) + '\xd7' + Math.round(original.height) + ')');
       continue;
     }
 
-    var ratio = original.width / original.height;
-    if (Math.abs(ratio - 0.75) > 0.08) {
-      skipped.push('"' + original.name + '": not 3:4 (' + Math.round(original.width) + '×' + Math.round(original.height) + ')');
-      continue;
+    // Notify UI of progress when AI is on (can be slow)
+    if (options.expandBg && frames.length > 1) {
+      figma.ui.postMessage({ type: 'progress', current: i + 1, total: frames.length });
     }
 
     try {
-      var result = convertSingleFrame(original, options);
+      var result = await convertSingleFrame(original, options);
       newFrames.push(result);
       converted++;
     } catch (err) {
@@ -196,22 +267,20 @@ async function convertToReels(options) {
     return { success: false, message: 'Nothing converted. ' + skipped.join('; ') };
   }
 
-  // Select all new frames and zoom to fit
   figma.currentPage.selection = newFrames;
   figma.viewport.scrollAndZoomIntoView(newFrames);
 
   var msg = 'Converted ' + converted + ' frame' + (converted > 1 ? 's' : '') + ' to 9:16.';
-  if (skipped.length > 0) {
-    msg += ' Skipped ' + skipped.length + ': ' + skipped.join('; ');
-  }
+  if (warnings.length)  msg += ' ⚠️ ' + warnings.join(' | ');
+  if (skipped.length)   msg += ' Skipped ' + skipped.length + ': ' + skipped.join('; ');
   return { success: true, message: msg };
 }
 
 // ---------------------------------------------------------------------------
-// Selection info — reports count and how many are valid 3:4 frames
+// Selection info
 // ---------------------------------------------------------------------------
 function sendSelectionInfo() {
-  var sel = figma.currentPage.selection;
+  var sel    = figma.currentPage.selection;
   var frames = sel.filter(function(n) { return n.type === 'FRAME'; });
   var valid  = frames.filter(function(f) {
     return Math.abs((f.width / f.height) - 0.75) <= 0.08;
@@ -221,23 +290,16 @@ function sendSelectionInfo() {
     figma.ui.postMessage({ type: 'selection-info', count: 0 });
     return;
   }
-
   if (frames.length === 1) {
     var f = frames[0];
     figma.ui.postMessage({
-      type:       'selection-info',
-      count:      1,
-      validCount: valid.length,
-      name:       f.name,
-      width:      Math.round(f.width),
-      height:     Math.round(f.height),
-      ratio:      (f.width / f.height).toFixed(3)
+      type: 'selection-info', count: 1, validCount: valid.length,
+      name: f.name, width: Math.round(f.width), height: Math.round(f.height),
+      ratio: (f.width / f.height).toFixed(3)
     });
   } else {
     figma.ui.postMessage({
-      type:       'selection-info',
-      count:      frames.length,
-      validCount: valid.length
+      type: 'selection-info', count: frames.length, validCount: valid.length
     });
   }
 }
@@ -246,6 +308,32 @@ function sendSelectionInfo() {
 // Message bus
 // ---------------------------------------------------------------------------
 figma.ui.onmessage = async function(msg) {
+  // AI expansion response — resolves/rejects the pending promise
+  if (msg.type === 'expanded-image-result') {
+    if (pendingExpandResolve) {
+      var res = pendingExpandResolve;
+      pendingExpandResolve = null;
+      pendingExpandReject  = null;
+      res(msg.imageBytes);
+    }
+    return;
+  }
+  if (msg.type === 'expanded-image-error') {
+    if (pendingExpandReject) {
+      var rej = pendingExpandReject;
+      pendingExpandResolve = null;
+      pendingExpandReject  = null;
+      rej(new Error(msg.message));
+    }
+    return;
+  }
+
+  // UI resize request
+  if (msg.type === 'resize') {
+    figma.ui.resize(320, msg.height);
+    return;
+  }
+
   try {
     if (msg.type === 'convert') {
       var result = await convertToReels(msg.options);

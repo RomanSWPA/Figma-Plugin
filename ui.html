@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <title>Reels Converter</title>
   <style>
-    /* ── Reset / base ──────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -16,306 +15,229 @@
       user-select: none;
     }
 
-    /* ── Header ────────────────────────────────────────────────────── */
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
+    /* Header */
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
     .header-icon {
-      width: 34px;
-      height: 34px;
+      width: 34px; height: 34px;
       background: linear-gradient(135deg, #f84f39, #e8182d);
       border-radius: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
       box-shadow: 0 2px 6px rgba(232,24,45,.35);
     }
     .header-icon svg { display: block; }
-    .header h1   { font-size: 13px; font-weight: 700; line-height: 1.2; }
-    .header p    { font-size: 11px; color: #777; margin-top: 2px; }
+    .header h1 { font-size: 13px; font-weight: 700; line-height: 1.2; }
+    .header p  { font-size: 11px; color: #777; margin-top: 2px; }
 
-    /* ── Selection card ────────────────────────────────────────────── */
-    .card {
-      background: #f5f5f5;
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin-bottom: 14px;
-    }
+    /* Selection card */
+    .card { background: #f5f5f5; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
     .card-label {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .09em;
-      color: #999;
-      margin-bottom: 6px;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .09em; color: #999; margin-bottom: 6px;
     }
-    .sel-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-height: 20px;
-    }
-    .sel-name {
-      flex: 1;
-      font-weight: 500;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sel-dim {
-      font-size: 10px;
-      color: #888;
-      background: #e4e4e4;
-      padding: 2px 5px;
-      border-radius: 4px;
-      flex-shrink: 0;
-    }
-    .badge {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 10px;
-      flex-shrink: 0;
-    }
+    .sel-row { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+    .sel-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sel-dim  { font-size: 10px; color: #888; background: #e4e4e4; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
+    .badge    { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; flex-shrink: 0; }
     .badge-ok  { background: #d1f5e0; color: #0e6e3a; }
     .badge-bad { background: #fde0e3; color: #9b1c24; }
     .sel-empty { color: #aaa; font-style: italic; }
 
-    /* ── Visual diagram ─────────────────────────────────────────────── */
+    /* Diagram */
     .diagram-wrap {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 18px;
-      padding: 12px 8px;
-      background: #f9f9f9;
-      border-radius: 8px;
-      margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: center;
+      gap: 18px; padding: 12px 8px;
+      background: #f9f9f9; border-radius: 8px; margin-bottom: 14px;
     }
     .diagram-col { text-align: center; }
-    .diagram-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: #777;
-      margin-top: 5px;
-    }
-
-    /* 3:4 box — 36×48 */
-    .box-34 {
-      width: 36px;
-      height: 48px;
-      border-radius: 3px;
-      background: linear-gradient(160deg, #7c6fcd, #b09ef5);
-      margin: 0 auto;
-    }
-
-    /* 9:16 box — 27×48 */
-    .box-916 {
-      position: relative;
-      width: 27px;
-      height: 48px;
-      border-radius: 3px;
-      background: linear-gradient(160deg, #1cb87a, #0ec88c);
-      margin: 0 auto;
-      overflow: hidden;
-    }
-    /* Safe-zone dashed overlay */
-    .safe-overlay {
-      position: absolute;
-      left: 0;
-      right: 0;
-      border-top: 1.5px dashed rgba(255,255,255,.85);
-      border-bottom: 1.5px dashed rgba(255,255,255,.85);
-      pointer-events: none;
-      transition: top .2s, height .2s;
-    }
-    /* Slightly darkened bands above / below safe zone */
-    .ext-band {
-      position: absolute;
-      left: 0;
-      right: 0;
-      background: rgba(0,0,0,.18);
-      pointer-events: none;
-      transition: height .2s, top .2s;
-    }
-
+    .diagram-label { font-size: 10px; font-weight: 600; color: #777; margin-top: 5px; }
+    .box-34  { width: 36px; height: 48px; border-radius: 3px; background: linear-gradient(160deg,#7c6fcd,#b09ef5); margin: 0 auto; }
+    .box-916 { position: relative; width: 27px; height: 48px; border-radius: 3px; background: linear-gradient(160deg,#1cb87a,#0ec88c); margin: 0 auto; overflow: hidden; }
+    .safe-overlay { position: absolute; left: 0; right: 0; border-top: 1.5px dashed rgba(255,255,255,.85); border-bottom: 1.5px dashed rgba(255,255,255,.85); pointer-events: none; transition: top .2s, height .2s; }
+    .ext-band { position: absolute; left: 0; right: 0; background: rgba(0,0,0,.18); pointer-events: none; transition: height .2s, top .2s; }
     .arrow { font-size: 16px; color: #bbb; }
+    .legend { font-size: 10px; color: #999; line-height: 1.6; }
 
-    .legend {
-      font-size: 10px;
-      color: #999;
-      line-height: 1.6;
+    /* Section label */
+    .section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: #999; margin-bottom: 7px; }
+
+    /* Radio */
+    .radio-group  { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .radio-option {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 10px; border: 1.5px solid #e8e8e8; border-radius: 7px;
+      cursor: pointer; transition: border-color .12s, background .12s;
     }
-    .legend span { display: inline-block; width: 14px; text-align: center; }
+    .radio-option:hover        { border-color: #c0c0c0; background: #fafafa; }
+    .radio-option.active       { border-color: #18a0fb; background: #e8f4ff; }
+    .radio-option input        { accent-color: #18a0fb; width: 13px; height: 13px; flex-shrink: 0; cursor: pointer; }
+    .radio-title { font-weight: 500; font-size: 12px; }
+    .radio-desc  { font-size: 10px; color: #999; margin-top: 1px; }
 
-    /* ── Section label ──────────────────────────────────────────────── */
-    .section-label {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .09em;
-      color: #999;
-      margin-bottom: 7px;
-    }
-
-    /* ── Radio options ──────────────────────────────────────────────── */
-    .radio-group   { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
-    .radio-option  {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      padding: 7px 10px;
-      border: 1.5px solid #e8e8e8;
-      border-radius: 7px;
-      cursor: pointer;
-      transition: border-color .12s, background .12s;
-    }
-    .radio-option:hover           { border-color: #c0c0c0; background: #fafafa; }
-    .radio-option.active          { border-color: #18a0fb; background: #e8f4ff; }
-    .radio-option input           { accent-color: #18a0fb; width: 13px; height: 13px; flex-shrink: 0; cursor: pointer; }
-    .radio-title  { font-weight: 500; font-size: 12px; }
-    .radio-desc   { font-size: 10px; color: #999; margin-top: 1px; }
-
-    /* ── Divider ────────────────────────────────────────────────────── */
+    /* Divider */
     .divider { height: 1px; background: #f0f0f0; margin: 12px 0; }
 
-    /* ── Toggle ─────────────────────────────────────────────────────── */
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
-    }
+    /* Toggle row */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .toggle-row label { font-size: 12px; color: #333; cursor: pointer; }
     .switch { position: relative; display: inline-block; width: 32px; height: 18px; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; inset: 0;
-      background: #ccc;
-      border-radius: 18px;
-      cursor: pointer;
-      transition: background .2s;
-    }
-    .slider::before {
-      content: '';
-      position: absolute;
-      width: 12px; height: 12px;
-      left: 3px; bottom: 3px;
-      background: #fff;
-      border-radius: 50%;
-      transition: transform .2s;
-    }
+    .slider { position: absolute; inset: 0; background: #ccc; border-radius: 18px; cursor: pointer; transition: background .2s; }
+    .slider::before { content: ''; position: absolute; width: 12px; height: 12px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform .2s; }
     .switch input:checked + .slider             { background: #18a0fb; }
     .switch input:checked + .slider::before    { transform: translateX(14px); }
 
-    /* ── Convert button ─────────────────────────────────────────────── */
-    #convertBtn {
-      width: 100%;
-      padding: 10px;
-      background: #18a0fb;
-      color: #fff;
-      border: none;
-      border-radius: 7px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s, opacity .15s;
+    /* AI section */
+    .ai-section {
+      background: #f0f7ff;
+      border: 1.5px solid #c8e0ff;
+      border-radius: 8px;
+      padding: 10px 12px;
       margin-bottom: 10px;
     }
-    #convertBtn:hover:not(:disabled) { background: #0d8de8; }
-    #convertBtn:active:not(:disabled){ background: #0a7acf; }
-    #convertBtn:disabled              { background: #bbb; cursor: not-allowed; }
-
-    /* ── Status message ─────────────────────────────────────────────── */
-    .status {
+    .ai-section .toggle-row { margin-bottom: 0; }
+    .ai-key-row {
+      margin-top: 10px;
       display: none;
-      padding: 8px 10px;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .ai-key-row.visible { display: flex; }
+    .ai-key-label { font-size: 10px; color: #555; font-weight: 500; }
+    .ai-key-input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1.5px solid #c8e0ff;
       border-radius: 6px;
       font-size: 11px;
-      line-height: 1.5;
+      color: #1a1a1a;
+      background: #fff;
+      outline: none;
+      transition: border-color .15s;
+      font-family: 'SF Mono', 'Fira Code', monospace;
     }
-    .status.ok  { display: block; background: #d1f5e0; color: #0e5c31; }
-    .status.err { display: block; background: #fde0e3; color: #821720; }
+    .ai-key-input:focus { border-color: #18a0fb; }
+    .ai-hint {
+      font-size: 10px;
+      color: #666;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+    .ai-hint a { color: #18a0fb; text-decoration: none; }
+    .ai-hint a:hover { text-decoration: underline; }
+
+    /* Convert button */
+    #convertBtn {
+      width: 100%; padding: 10px;
+      background: #18a0fb; color: #fff;
+      border: none; border-radius: 7px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+      margin-bottom: 6px;
+    }
+    #convertBtn:hover:not(:disabled)  { background: #0d8de8; }
+    #convertBtn:active:not(:disabled) { background: #0a7acf; }
+    #convertBtn:disabled              { background: #bbb; cursor: not-allowed; }
+
+    .multi-hint { font-size: 10px; color: #888; text-align: center; margin-bottom: 8px; display: none; }
+
+    /* Status */
+    .status { display: none; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
+    .status.ok   { display: block; background: #d1f5e0; color: #0e5c31; }
+    .status.err  { display: block; background: #fde0e3; color: #821720; }
+    .status.warn { display: block; background: #fff3cd; color: #856404; }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <div class="header-icon">
-      <!-- Play-button triangle -->
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M5 3.5L13 8L5 12.5V3.5Z" fill="white"/>
       </svg>
     </div>
     <div>
       <h1>Reels Converter</h1>
-      <p>3:4 banner → 9:16 Instagram Reels</p>
+      <p>3:4 banner &rarr; 9:16 Instagram Reels</p>
     </div>
   </div>
 
-  <!-- Selection info -->
+  <!-- Selection -->
   <div class="card">
     <div class="card-label">Selected Frame</div>
     <div class="sel-row" id="selDisplay">
-      <span class="sel-empty">No frame selected</span>
+      <span class="sel-empty">No frame selected &mdash; pick one or more 3:4 frames</span>
     </div>
   </div>
 
-  <!-- Visual diagram -->
+  <!-- Diagram -->
   <div class="diagram-wrap">
     <div class="diagram-col">
       <div class="box-34"></div>
       <div class="diagram-label">3:4</div>
     </div>
-    <div class="arrow">→</div>
+    <div class="arrow">&rarr;</div>
     <div class="diagram-col">
       <div class="box-916" id="box916">
-        <div class="ext-band" id="extTop"   style="top:0; height:12.5%;"></div>
-        <div class="safe-overlay"           id="safeOverlay" style="top:12.5%; height:75%;"></div>
-        <div class="ext-band" id="extBot"   style="bottom:0; height:12.5%;"></div>
+        <div class="ext-band"    id="extTop"      style="top:0; height:12.5%;"></div>
+        <div class="safe-overlay" id="safeOverlay" style="top:12.5%; height:75%;"></div>
+        <div class="ext-band"    id="extBot"      style="bottom:0; height:12.5%;"></div>
       </div>
       <div class="diagram-label">9:16</div>
     </div>
     <div class="legend">
-      <div><span style="color:#1cb87a">▪</span> bg fills</div>
+      <div><span style="color:#1cb87a">&#9642;</span> bg fills</div>
       <div><span style="color:rgba(255,255,255,.85)">--</span> safe zone</div>
     </div>
   </div>
 
-  <!-- Space distribution -->
+  <!-- Distribution -->
   <div class="section-label">Extra Space Distribution</div>
   <div class="radio-group" id="radioGroup">
     <label class="radio-option active" data-value="even">
       <input type="radio" name="dist" value="even" checked>
-      <div>
-        <div class="radio-title">Centered — even split</div>
-        <div class="radio-desc">Equal space added top &amp; bottom (recommended)</div>
-      </div>
+      <div><div class="radio-title">Centered &mdash; even split</div>
+           <div class="radio-desc">Equal space top &amp; bottom (recommended)</div></div>
     </label>
     <label class="radio-option" data-value="top">
       <input type="radio" name="dist" value="top">
-      <div>
-        <div class="radio-title">Extend top only</div>
-        <div class="radio-desc">Original content anchored to the bottom</div>
-      </div>
+      <div><div class="radio-title">Extend top only</div>
+           <div class="radio-desc">Original content anchored to the bottom</div></div>
     </label>
     <label class="radio-option" data-value="bottom">
       <input type="radio" name="dist" value="bottom">
-      <div>
-        <div class="radio-title">Extend bottom only</div>
-        <div class="radio-desc">Original content anchored to the top</div>
-      </div>
+      <div><div class="radio-title">Extend bottom only</div>
+           <div class="radio-desc">Original content anchored to the top</div></div>
     </label>
   </div>
 
   <div class="divider"></div>
 
-  <!-- Safe-zone toggle -->
+  <!-- AI Background Expansion -->
+  <div class="ai-section">
+    <div class="toggle-row">
+      <label for="aiToggle" style="font-weight:600; color:#1a6bbf;">
+        &#10024; Expand background with AI
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="aiToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="ai-key-row" id="aiKeyRow">
+      <div class="ai-key-label">Stability AI API Key</div>
+      <input type="password" id="apiKeyInput" class="ai-key-input"
+             placeholder="sk-..." autocomplete="off" spellcheck="false" />
+      <div class="ai-hint">
+        Free key at <a href="https://platform.stability.ai/account/keys" target="_blank">platform.stability.ai</a>
+        &mdash; uses the <em>Outpaint</em> model to intelligently extend the background.
+        Your key is saved locally.
+      </div>
+    </div>
+  </div>
+
+  <!-- Safe zone toggle -->
   <div class="toggle-row">
     <label for="safeZoneToggle">Show safe-zone guide on output</label>
     <label class="switch">
@@ -326,41 +248,60 @@
 
   <!-- CTA -->
   <button id="convertBtn" disabled>Convert to 9:16 Reels</button>
-  <div id="multiHint" style="display:none; font-size:10px; color:#888; text-align:center; margin-top:-6px; margin-bottom:8px;"></div>
+  <div class="multi-hint" id="multiHint"></div>
 
   <!-- Status -->
   <div class="status" id="statusMsg"></div>
 
 <script>
   var selectionValid = false;
+  var COMPACT_H = 470;
+  var EXPANDED_H = 530;
 
+  // Boot
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
-  // ── Radio button styling ──────────────────────────────────────────────
+  // Restore saved API key
+  var savedKey = localStorage.getItem('stability-api-key') || '';
+  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+
+  // ── Radio ─────────────────────────────────────────────────────────────
   document.getElementById('radioGroup').addEventListener('change', function(e) {
-    document.querySelectorAll('.radio-option').forEach(function(opt) {
-      opt.classList.toggle('active', opt.dataset.value === e.target.value);
+    document.querySelectorAll('.radio-option').forEach(function(o) {
+      o.classList.toggle('active', o.dataset.value === e.target.value);
     });
     updateDiagram(e.target.value);
   });
 
-  // ── Diagram update ────────────────────────────────────────────────────
+  // ── Diagram ───────────────────────────────────────────────────────────
   var SAFE = 0.75;
-
   function updateDiagram(dist) {
     var extTop = document.getElementById('extTop');
     var extBot = document.getElementById('extBot');
     var safe   = document.getElementById('safeOverlay');
     var extra  = 1 - SAFE;
-    var topFrac, botFrac;
-    if (dist === 'top')         { topFrac = extra; botFrac = 0;     }
-    else if (dist === 'bottom') { topFrac = 0;     botFrac = extra; }
-    else                        { topFrac = extra / 2; botFrac = extra / 2; }
-    extTop.style.height = (topFrac * 100) + '%';
-    extBot.style.height = (botFrac * 100) + '%';
-    safe.style.top      = (topFrac * 100) + '%';
-    safe.style.height   = (SAFE   * 100) + '%';
+    var tf = dist === 'top' ? extra : dist === 'bottom' ? 0 : extra / 2;
+    var bf = extra - tf;
+    extTop.style.height = (tf * 100) + '%';
+    extBot.style.height = (bf * 100) + '%';
+    safe.style.top      = (tf * 100) + '%';
+    safe.style.height   = (SAFE * 100) + '%';
   }
+
+  // ── AI toggle ─────────────────────────────────────────────────────────
+  document.getElementById('aiToggle').addEventListener('change', function() {
+    var on = this.checked;
+    var row = document.getElementById('aiKeyRow');
+    row.classList.toggle('visible', on);
+    parent.postMessage({ pluginMessage: { type: 'resize', height: on ? EXPANDED_H : COMPACT_H } }, '*');
+    updateConvertButton();
+  });
+
+  // Save API key on change
+  document.getElementById('apiKeyInput').addEventListener('input', function() {
+    localStorage.setItem('stability-api-key', this.value.trim());
+    updateConvertButton();
+  });
 
   // ── Selection display ─────────────────────────────────────────────────
   function esc(s) {
@@ -369,73 +310,101 @@
 
   function renderSelection(data) {
     var display = document.getElementById('selDisplay');
-    var btn     = document.getElementById('convertBtn');
     var hint    = document.getElementById('multiHint');
 
-    // No frames selected
     if (!data || data.count === 0) {
-      display.innerHTML = '<span class="sel-empty">No frame selected — pick one or more 3:4 frames</span>';
-      btn.disabled = true;
-      btn.textContent = 'Convert to 9:16 Reels';
+      display.innerHTML = '<span class="sel-empty">No frame selected &mdash; pick one or more 3:4 frames</span>';
       hint.style.display = 'none';
       selectionValid = false;
+      updateConvertButton();
       return;
     }
 
-    // Multiple frames selected
     if (data.count > 1) {
-      var allValid = data.validCount === data.count;
       var bClass = data.validCount > 0 ? 'badge-ok' : 'badge-bad';
       display.innerHTML =
         '<span class="sel-name">' + data.count + ' frames selected</span>' +
         '<span class="badge ' + bClass + '">' + data.validCount + '/' + data.count + ' are 3:4</span>';
       selectionValid = data.validCount > 0;
-      btn.disabled   = !selectionValid;
-      btn.textContent = 'Convert ' + data.validCount + ' Frame' + (data.validCount > 1 ? 's' : '') + ' to 9:16';
       hint.textContent = data.validCount < data.count
         ? (data.count - data.validCount) + ' non-3:4 frame(s) will be skipped'
-        : 'All selected frames will be converted';
+        : 'All frames will be converted';
       hint.style.display = 'block';
-      return;
+    } else {
+      hint.style.display = 'none';
+      var ratio   = parseFloat(data.ratio);
+      var isValid = Math.abs(ratio - 0.75) <= 0.08;
+      display.innerHTML =
+        '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
+        '<span class="sel-dim">' + data.width + '&times;' + data.height + '</span>' +
+        '<span class="badge ' + (isValid ? 'badge-ok' : 'badge-bad') + '">' +
+        (isValid ? '3:4 &#10003;' : ratio.toFixed(2)) + '</span>';
+      selectionValid = isValid;
     }
-
-    // Single frame
-    hint.style.display = 'none';
-    var ratio   = parseFloat(data.ratio);
-    var isValid = Math.abs(ratio - 0.75) <= 0.08;
-    var bClass2 = isValid ? 'badge-ok' : 'badge-bad';
-    var bText   = isValid ? '3:4 ✓' : ratio.toFixed(2);
-    display.innerHTML =
-      '<span class="sel-name" title="' + esc(data.name) + '">' + esc(data.name) + '</span>' +
-      '<span class="sel-dim">' + data.width + '\xd7' + data.height + '</span>' +
-      '<span class="badge ' + bClass2 + '">' + bText + '</span>';
-    btn.disabled   = !isValid;
-    btn.textContent = 'Convert to 9:16 Reels';
-    selectionValid = isValid;
+    updateConvertButton();
   }
 
-  // ── Status display ────────────────────────────────────────────────────
+  // ── Button state ──────────────────────────────────────────────────────
+  function updateConvertButton() {
+    var btn      = document.getElementById('convertBtn');
+    var aiOn     = document.getElementById('aiToggle').checked;
+    var apiKey   = document.getElementById('apiKeyInput').value.trim();
+    var aiReady  = !aiOn || apiKey.length > 4;
+    var canConvert = selectionValid && aiReady;
+    btn.disabled = !canConvert;
+
+    var sel = document.querySelector('input[name="dist"]');
+    var validCount = getValidCount();
+    if (validCount > 1) {
+      btn.textContent = 'Convert ' + validCount + ' Frames to 9:16';
+    } else {
+      btn.textContent = 'Convert to 9:16 Reels';
+    }
+  }
+
+  var _lastValidCount = 0;
+  function getValidCount() { return _lastValidCount; }
+
+  // Override renderSelection to track count
+  var _origRender = renderSelection;
+  renderSelection = function(data) {
+    _lastValidCount = data && data.validCount ? data.validCount : (data && data.count === 1 ? 1 : 0);
+    _origRender(data);
+  };
+
+  // ── Status ────────────────────────────────────────────────────────────
   function showStatus(type, msg) {
     var el = document.getElementById('statusMsg');
-    el.className  = 'status ' + type;
+    el.className = 'status ' + type;
     el.textContent = msg;
   }
   function clearStatus() {
     var el = document.getElementById('statusMsg');
-    el.className  = 'status';
-    el.textContent = '';
+    el.className = 'status'; el.textContent = '';
   }
 
-  // ── Convert button ────────────────────────────────────────────────────
+  // ── Convert ───────────────────────────────────────────────────────────
   document.getElementById('convertBtn').addEventListener('click', function() {
     var dist      = document.querySelector('input[name="dist"]:checked').value;
     var showGuide = document.getElementById('safeZoneToggle').checked;
+    var aiOn      = document.getElementById('aiToggle').checked;
+    var apiKey    = document.getElementById('apiKeyInput').value.trim();
     var btn       = document.getElementById('convertBtn');
+
     clearStatus();
     btn.disabled    = true;
-    btn.textContent = 'Converting…';
+    btn.textContent = aiOn ? 'Expanding with AI…' : 'Converting…';
+
     parent.postMessage({
-      pluginMessage: { type: 'convert', options: { distribution: dist, showSafeZone: showGuide } }
+      pluginMessage: {
+        type: 'convert',
+        options: {
+          distribution: dist,
+          showSafeZone: showGuide,
+          expandBg: aiOn,
+          apiKey:   aiOn ? apiKey : ''
+        }
+      }
     }, '*');
   });
 
@@ -443,24 +412,79 @@
   window.addEventListener('message', function(e) {
     var msg = e.data.pluginMessage;
     if (!msg) return;
+
     if (msg.type === 'selection-info') {
       renderSelection(msg);
-    } else if (msg.type === 'result') {
+
+    } else if (msg.type === 'progress') {
       var btn = document.getElementById('convertBtn');
-      btn.disabled = !selectionValid;
-      // Restore correct button label based on last known state
+      btn.textContent = 'Frame ' + msg.current + '/' + msg.total + '…';
+
+    } else if (msg.type === 'expand-image') {
+      // UI thread calls Stability AI and returns the result
+      handleExpandImage(msg);
+
+    } else if (msg.type === 'result') {
+      updateConvertButton();
       parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
       if (msg.success) {
         showStatus('ok', msg.message);
       } else {
         showStatus('err', msg.message);
-        btn.textContent = 'Convert to 9:16 Reels';
       }
     }
   });
 
-  // Init diagram
+  // ── Stability AI outpainting call ─────────────────────────────────────
+  async function handleExpandImage(data) {
+    try {
+      var imageBytes = new Uint8Array(data.imageBytes);
+      var blob       = new Blob([imageBytes], { type: 'image/png' });
+      var form       = new FormData();
+      form.append('image', blob, 'bg.png');
+      if (data.upPx   > 0) form.append('up',    String(data.upPx));
+      if (data.downPx > 0) form.append('down',  String(data.downPx));
+      form.append('left',          '0');
+      form.append('right',         '0');
+      form.append('creativity',    '0.4');
+      form.append('output_format', 'png');
+
+      var controller = new AbortController();
+      var timeout    = setTimeout(function() { controller.abort(); }, 90000);
+
+      var response = await fetch('https://api.stability.ai/v2beta/stable-image/edit/outpaint', {
+        method:  'POST',
+        headers: { 'Authorization': 'Bearer ' + data.apiKey, 'Accept': 'image/*' },
+        body:    form,
+        signal:  controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        var errText = await response.text();
+        throw new Error('Stability AI ' + response.status + ': ' + errText.slice(0, 160));
+      }
+
+      var buf        = await response.arrayBuffer();
+      var resultArr  = Array.from(new Uint8Array(buf));
+
+      parent.postMessage({
+        pluginMessage: { type: 'expanded-image-result', imageBytes: resultArr }
+      }, '*');
+
+    } catch (err) {
+      var errMsg = err.name === 'AbortError'
+        ? 'Request timed out after 90s. Check your internet connection.'
+        : (err.message || String(err));
+      parent.postMessage({
+        pluginMessage: { type: 'expanded-image-error', message: errMsg }
+      }, '*');
+    }
+  }
+
+  // Init
   updateDiagram('even');
+  updateConvertButton();
 </script>
 </body>
 </html>
