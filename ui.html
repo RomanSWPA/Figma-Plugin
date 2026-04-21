@@ -188,9 +188,11 @@
 <script>
   parent.postMessage({ pluginMessage: { type: 'get-selection' } }, '*');
 
-  // Restore saved key
-  var savedKey = localStorage.getItem('stability-api-key') || '';
-  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  // Restore saved key (wrapped in try-catch — localStorage throws in some Figma sandboxes)
+  try {
+    var savedKey = localStorage.getItem('stability-api-key') || '';
+    if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  } catch (_) {}
 
   // Radio buttons
   document.getElementById('radioGroup').addEventListener('change', function(e) {
@@ -216,7 +218,7 @@
     parent.postMessage({ pluginMessage: { type: 'resize', height: this.checked ? 560 : 470 } }, '*');
   });
   document.getElementById('apiKeyInput').addEventListener('input', function() {
-    localStorage.setItem('stability-api-key', this.value.trim());
+    try { localStorage.setItem('stability-api-key', this.value.trim()); } catch (_) {}
   });
 
   function esc(s) {
