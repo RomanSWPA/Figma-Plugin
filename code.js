@@ -17,6 +17,9 @@ function sendSelectionInfo() {
   // Build a list of all selected types for debug output
   var allTypes = sel.map(function(n) { return n.type; });
 
+  // Debug toast — tells us exactly what Figma sees
+  figma.notify('Detected: [' + (allTypes.join(', ') || 'nothing') + ']', { timeout: 3000 });
+
   var frames = sel.filter(function(n) {
     return CONVERTIBLE_TYPES.indexOf(n.type) !== -1;
   });
